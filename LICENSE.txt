@@ -1,0 +1,48 @@
+ACUERDO DE LICENCIA DE SOFTWARE
+WelcomeX v4.9
+
+Copyright (c) 2026 PampaGuazú - Todos los derechos reservados
+
+TÉRMINOS Y CONDICIONES:
+
+1. LICENCIA DE USO
+   Este software se proporciona bajo licencia. El uso de este software
+   está sujeto a la adquisición de una licencia válida de PampaGuazú.
+
+2. RESTRICCIONES
+   - No se permite la redistribución sin autorización expresa
+   - No se permite la ingeniería inversa o descompilación
+   - No se permite la modificación del software
+   - Cada licencia es válida para una (1) computadora
+
+3. GARANTÍA
+   Este software se proporciona "tal cual" sin garantías de ningún tipo.
+   PampaGuazú no se hace responsable por daños derivados del uso del software.
+
+4. SOPORTE
+   El soporte técnico está disponible solo para licencias activas y válidas.
+   
+5. MODO DEMO
+   La versión demo está limitada a 7 días y solo permite visualización.
+   Para uso completo, debe adquirir una licencia.
+
+Para más información o adquirir una licencia:
+Web: https://pampaguazu.com
+Email: contacto@pampaguazu.com
+WhatsApp: [Tu número]
+
+---
+
+REQUISITOS DEL SISTEMA:
+- Windows 10/11 (64-bit)
+- 4GB RAM mínimo (8GB recomendado)
+- 500MB espacio en disco
+- VLC Media Player (para reproducción de audio en videos)
+- Resolución 1920x1080 o superior
+- Lector de códigos QR (pistola USB recomendada)
+
+---
+
+WelcomeX - Sistema de Gestión de Eventos
+Desarrollado por PampaGuazú
+Versión 4.9 - Enero 2026

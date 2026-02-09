@@ -33,3 +33,12 @@ Thumbs.db
 # Sensitive
 .env
 *.env
+
+# Demo videos (distributed via release)
+demo_videos/*.mp4
+
+# Claude Code
+.claude/
+
+# Windows artifacts
+nul

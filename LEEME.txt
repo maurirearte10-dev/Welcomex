@@ -1,0 +1,46 @@
+=====================================
+  WelcomeX v4.8 - Guia Rapida
+=====================================
+
+INSTALACION:
+------------
+
+1. Doble click en: INSTALAR.bat
+2. Esperar que termine
+3. Listo!
+
+
+EJECUTAR:
+---------
+
+Doble click en: WelcomeX.bat
+
+
+PROBLEMAS COMUNES:
+------------------
+
+"pip no se reconoce"
+-> Python no instalado o no en PATH
+-> Solucion: Descargar Python desde python.org
+-> IMPORTANTE: Marcar "Add Python to PATH"
+
+
+"customtkinter no encontrado"
+-> Ejecutar: INSTALAR.bat
+
+
+"opencv error"
+-> Abrir PowerShell como Administrador
+-> Ejecutar: python -m pip install opencv-python
+
+
+CONTACTO:
+---------
+
+[Tu WhatsApp]
+[Tu Email]
+
+
+Version: 4.8
+Fecha: Enero 2025
+=====================================
