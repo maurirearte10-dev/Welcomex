@@ -18,7 +18,7 @@ import webbrowser
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
-from config.settings import COLORS, PERMISOS, MAX_OPERARIOS, PLANES, RESOURCE_DIR
+from config.settings import COLORS, PERMISOS, MAX_OPERARIOS, PLANES, RESOURCE_DIR, APP_VERSION
 from modules.database import db
 from modules.pampa_client import PampaClient
 from modules.i18n import t, set_language, get_language, SUPPORTED_LANGUAGES, LANGUAGE_NAMES
@@ -68,6 +68,9 @@ class WelcomeXApp(ctk.CTk):
         # PAMPA Client - Servidor de Licencias
         self.pampa = PampaClient("WELCOME_X", "https://pampaguazu.com.ar")
 
+        # Info de actualización pendiente (se chequea en background)
+        self.update_info = None
+
         # Verificar licencia o trial demo
         license_status = self.verificar_licencia_startup()
 
@@ -83,7 +86,68 @@ class WelcomeXApp(ctk.CTk):
         else:
             # Sin licencia ni trial → Mostrar opciones
             self.mostrar_opciones_inicio()
+
+        # Chequear actualizaciones en background (no bloquea el inicio)
+        self.after(2000, self._check_for_updates)
     
+    # ============================================
+    # ACTUALIZACIONES
+    # ============================================
+
+    def _check_for_updates(self):
+        """Chequea si hay una versión nueva disponible (no bloqueante)"""
+        import threading
+        def _check():
+            update = self.pampa.check_for_updates(APP_VERSION)
+            if update:
+                self.update_info = update
+                self.after(0, self._mostrar_banner_update)
+        threading.Thread(target=_check, daemon=True).start()
+
+    def _mostrar_banner_update(self):
+        """Muestra un banner dorado arriba de la ventana avisando que hay actualización"""
+        if not self.update_info:
+            return
+
+        lang = get_language()
+        version = self.update_info["latest_version"]
+        changelog = self.update_info.get("changelog", {})
+        cambios = changelog.get(lang, changelog.get("es", ""))
+        download_url = self.update_info.get("download_url", "")
+
+        # Crear banner flotante arriba
+        self.update_banner = ctk.CTkFrame(self, fg_color="#b8860b", corner_radius=0, height=40)
+        self.update_banner.place(relx=0, rely=0, relwidth=1)
+        self.update_banner.lift()
+
+        inner = ctk.CTkFrame(self.update_banner, fg_color="transparent")
+        inner.pack(expand=True, fill="x", padx=20)
+
+        texto = f"v{version} — {t('update.available')}"
+        if cambios:
+            texto += f"  |  {cambios}"
+
+        label = ctk.CTkLabel(inner, text=texto, text_color="white", font=("Segoe UI", 13, "bold"))
+        label.pack(side="left", padx=(0, 15))
+
+        btn_download = ctk.CTkButton(
+            inner,
+            text=t("update.download_btn"),
+            width=120, height=28,
+            fg_color="#1a1a2e", hover_color="#2b2b3c",
+            font=("Segoe UI", 12, "bold"),
+            command=lambda: webbrowser.open(download_url)
+        )
+        btn_download.pack(side="left", padx=5)
+
+        btn_close = ctk.CTkButton(
+            inner,
+            text="✕", width=28, height=28,
+            fg_color="transparent", hover_color="#8B6914",
+            command=lambda: self.update_banner.destroy()
+        )
+        btn_close.pack(side="right")
+
     # ============================================
     # UTILIDADES
     # ============================================

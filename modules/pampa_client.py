@@ -463,6 +463,42 @@ class PampaClient:
                 "error": f"Error inesperado: {str(e)}"
             }
 
+    # ==============================================
+    # VERIFICACIÓN DE ACTUALIZACIONES
+    # ==============================================
+
+    def check_for_updates(self, current_version: str) -> Optional[Dict]:
+        """
+        Consulta al servidor si hay una versión más nueva.
+        Retorna dict con info de la actualización o None si está al día.
+        """
+        try:
+            response = requests.get(
+                f"{self.api_url}/api/v1/version/{self.program_code}",
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                latest = data.get("latest_version", current_version)
+                if self._version_is_newer(latest, current_version):
+                    return {
+                        "latest_version": latest,
+                        "download_url": data.get("download_url", ""),
+                        "changelog": data.get("changelog", {})
+                    }
+            return None
+        except:
+            return None
+
+    def _version_is_newer(self, latest: str, current: str) -> bool:
+        """Compara versiones semánticas (1.2.3 > 1.2.0)"""
+        try:
+            latest_parts = [int(x) for x in latest.split(".")]
+            current_parts = [int(x) for x in current.split(".")]
+            return latest_parts > current_parts
+        except:
+            return False
+
 # ==============================================
 # EJEMPLO DE USO
 # ==============================================

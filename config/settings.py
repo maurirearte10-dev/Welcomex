@@ -5,6 +5,9 @@ WelcomeX - Configuración del Sistema
 import os
 import sys
 
+# Versión actual de la aplicación
+APP_VERSION = "1.0.0"
+
 # Detectar si está corriendo como .exe empaquetado por PyInstaller
 def is_frozen():
     """Detecta si la aplicación está corriendo como .exe"""

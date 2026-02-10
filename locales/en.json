@@ -199,5 +199,10 @@
         "no_winners_yet": "No winners yet.\n\nRun your first raffle!",
         "back": "← Back",
         "multiple_winners": "{count} Winners!"
+    },
+    "update": {
+        "available": "New version available",
+        "download_btn": "Download update",
+        "up_to_date": "You're up to date"
     }
 }

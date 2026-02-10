@@ -199,5 +199,10 @@
         "no_winners_yet": "Ainda não há vencedores.\n\nRealize seu primeiro sorteio!",
         "back": "← Voltar",
         "multiple_winners": "{count} Vencedores!"
+    },
+    "update": {
+        "available": "Nova versão disponível",
+        "download_btn": "Baixar atualização",
+        "up_to_date": "Você está atualizado"
     }
 }
