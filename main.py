@@ -464,13 +464,17 @@ class WelcomeXApp(ctk.CTk):
         """Verificar permisos del usuario"""
         if not self.usuario_actual:
             return False
-        
+
         rol = self.usuario_actual.get('rol', 'operario')
-        
+
         # Super admin siempre tiene todo
         if rol == 'super_admin':
             return True
-        
+
+        # 'cliente' tiene los mismos permisos que 'admin'
+        if rol == 'cliente':
+            rol = 'admin'
+
         # Verificar en matriz de permisos
         return PERMISOS.get(rol, {}).get(permiso, False)
     
@@ -1302,6 +1306,26 @@ class WelcomeXApp(ctk.CTk):
                                command=toggle_password, font=("Arial", 16))
         btn_eye.pack(side="left", padx=(5, 0))
 
+        # Checkbox "Recuérdame"
+        remember_var = ctk.BooleanVar(value=False)
+        remember_check = ctk.CTkCheckBox(
+            frame, text=t("login.remember_me"),
+            variable=remember_var,
+            font=("Arial", 13),
+            text_color=COLORS["text_light"],
+            fg_color=COLORS["primary"],
+            hover_color=COLORS["primary"]
+        )
+        remember_check.pack(pady=(0, 5), padx=50, anchor="w")
+
+        # Cargar credenciales guardadas
+        saved_email = db.get_config("remember_email")
+        saved_pass = db.get_config("remember_pass")
+        if saved_email and saved_pass:
+            entry_email.insert(0, saved_email)
+            entry_pass.insert(0, saved_pass)
+            remember_var.set(True)
+
         # Botón "Olvidé mi contraseña"
         btn_olvide = ctk.CTkButton(frame, text=t("login.forgot_password"),
                                     command=lambda: self.mostrar_recuperar_password(entry_email.get()),
@@ -1317,6 +1341,14 @@ class WelcomeXApp(ctk.CTk):
             if not email or not password:
                 self.mostrar_mensaje(t("common.error"), t("login.error_empty"), "error")
                 return
+
+            # Guardar o borrar credenciales según checkbox
+            if remember_var.get():
+                db.set_config("remember_email", email)
+                db.set_config("remember_pass", password)
+            else:
+                db.set_config("remember_email", "")
+                db.set_config("remember_pass", "")
 
             # Intentar autenticar online con PAMPA primero
             from modules.pampa_client import PampaClient

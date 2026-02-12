@@ -12,7 +12,8 @@
         "demo_mode": "Modo Demo",
         "error_empty": "Por favor, insira email e senha",
         "error_credentials": "Email ou senha inválidos",
-        "logging_in": "Entrando..."
+        "logging_in": "Entrando...",
+        "remember_me": "Lembrar-me"
     },
     "register": {
         "title": "Criar Nova Conta",

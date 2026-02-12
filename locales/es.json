@@ -12,7 +12,8 @@
         "demo_mode": "Modo Demo",
         "error_empty": "Ingrese email y contraseña",
         "error_credentials": "Email o contraseña incorrectos",
-        "logging_in": "Iniciando sesión..."
+        "logging_in": "Iniciando sesión...",
+        "remember_me": "Recuérdame"
     },
     "register": {
         "title": "Crear Nueva Cuenta",
