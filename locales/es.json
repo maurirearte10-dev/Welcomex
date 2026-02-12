@@ -33,6 +33,7 @@
     "sidebar": {
         "my_events": "Mis Eventos",
         "settings": "Configuración",
+        "updates": "Actualizaciones",
         "logout": "Cerrar Sesión"
     },
     "events": {
@@ -203,6 +204,15 @@
     "update": {
         "available": "Nueva versión disponible",
         "download_btn": "Descargar actualización",
-        "up_to_date": "Estás al día"
+        "up_to_date": "Estás al día",
+        "see_changes": "Ver cambios",
+        "window_title": "Actualizaciones",
+        "current_version": "Versión actual",
+        "loading": "Cargando historial de cambios...",
+        "error_loading": "No se pudo cargar el historial. Verifica tu conexión.",
+        "type_release": "Lanzamiento",
+        "type_update": "Actualización",
+        "type_fix": "Corrección",
+        "installed": "Instalada"
     }
 }

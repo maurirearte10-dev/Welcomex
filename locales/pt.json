@@ -33,6 +33,7 @@
     "sidebar": {
         "my_events": "Meus Eventos",
         "settings": "Configurações",
+        "updates": "Atualizações",
         "logout": "Sair"
     },
     "events": {
@@ -203,6 +204,15 @@
     "update": {
         "available": "Nova versão disponível",
         "download_btn": "Baixar atualização",
-        "up_to_date": "Você está atualizado"
+        "up_to_date": "Você está atualizado",
+        "see_changes": "Ver alterações",
+        "window_title": "Atualizações",
+        "current_version": "Versão atual",
+        "loading": "Carregando histórico de alterações...",
+        "error_loading": "Não foi possível carregar o histórico. Verifique sua conexão.",
+        "type_release": "Lançamento",
+        "type_update": "Atualização",
+        "type_fix": "Correção",
+        "installed": "Instalada"
     }
 }

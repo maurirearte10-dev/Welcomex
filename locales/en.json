@@ -33,6 +33,7 @@
     "sidebar": {
         "my_events": "My Events",
         "settings": "Settings",
+        "updates": "Updates",
         "logout": "Sign Out"
     },
     "events": {
@@ -203,6 +204,15 @@
     "update": {
         "available": "New version available",
         "download_btn": "Download update",
-        "up_to_date": "You're up to date"
+        "up_to_date": "You're up to date",
+        "see_changes": "See changes",
+        "window_title": "Updates",
+        "current_version": "Current version",
+        "loading": "Loading changelog...",
+        "error_loading": "Could not load changelog. Check your connection.",
+        "type_release": "Release",
+        "type_update": "Update",
+        "type_fix": "Fix",
+        "installed": "Installed"
     }
 }

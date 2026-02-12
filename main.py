@@ -112,8 +112,11 @@ class WelcomeXApp(ctk.CTk):
         lang = get_language()
         version = self.update_info["latest_version"]
         changelog = self.update_info.get("changelog", {})
-        cambios = changelog.get(lang, changelog.get("es", ""))
         download_url = self.update_info.get("download_url", "")
+
+        # Extraer primer cambio como resumen
+        cambios_lista = changelog.get(lang, changelog.get("es", []))
+        resumen = cambios_lista[0] if isinstance(cambios_lista, list) and cambios_lista else str(cambios_lista)
 
         # Crear banner flotante arriba
         self.update_banner = ctk.CTkFrame(self, fg_color="#b8860b", corner_radius=0, height=40)
@@ -123,18 +126,26 @@ class WelcomeXApp(ctk.CTk):
         inner = ctk.CTkFrame(self.update_banner, fg_color="transparent")
         inner.pack(expand=True, fill="x", padx=20)
 
-        texto = f"v{version} — {t('update.available')}"
-        if cambios:
-            texto += f"  |  {cambios}"
+        texto = f"v{version} — {t('update.available')}  |  {resumen}"
 
         label = ctk.CTkLabel(inner, text=texto, text_color="white", font=("Segoe UI", 13, "bold"))
         label.pack(side="left", padx=(0, 15))
 
+        btn_ver = ctk.CTkButton(
+            inner,
+            text=t("update.see_changes"),
+            width=100, height=28,
+            fg_color="#1a1a2e", hover_color="#2b2b3c",
+            font=("Segoe UI", 12, "bold"),
+            command=self.mostrar_ventana_updates
+        )
+        btn_ver.pack(side="left", padx=5)
+
         btn_download = ctk.CTkButton(
             inner,
             text=t("update.download_btn"),
-            width=120, height=28,
-            fg_color="#1a1a2e", hover_color="#2b2b3c",
+            width=130, height=28,
+            fg_color="#10b981", hover_color="#059669",
             font=("Segoe UI", 12, "bold"),
             command=lambda: webbrowser.open(download_url)
         )
@@ -147,6 +158,200 @@ class WelcomeXApp(ctk.CTk):
             command=lambda: self.update_banner.destroy()
         )
         btn_close.pack(side="right")
+
+    def mostrar_ventana_updates(self):
+        """Ventana visual con historial completo de actualizaciones"""
+        import threading
+
+        d = ctk.CTkToplevel(self)
+        d.title(t("update.window_title"))
+        d.geometry("600x700")
+        d.transient(self)
+        d.grab_set()
+
+        # Centrar
+        d.update_idletasks()
+        x = (d.winfo_screenwidth() - 600) // 2
+        y = (d.winfo_screenheight() - 700) // 2
+        d.geometry(f"+{x}+{y}")
+
+        # Header
+        header = ctk.CTkFrame(d, fg_color=COLORS["sidebar"], corner_radius=0, height=80)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        ctk.CTkLabel(
+            header,
+            text=t("update.window_title"),
+            font=("Segoe UI", 22, "bold"),
+            text_color="#d4af37"
+        ).pack(side="left", padx=25, pady=20)
+
+        ctk.CTkLabel(
+            header,
+            text=f"{t('update.current_version')}: v{APP_VERSION}",
+            font=("Segoe UI", 13),
+            text_color=COLORS["text_light"]
+        ).pack(side="right", padx=25, pady=20)
+
+        # Contenido scrollable
+        scroll = ctk.CTkScrollableFrame(d, fg_color=COLORS["bg"])
+        scroll.pack(expand=True, fill="both", padx=0, pady=0)
+
+        # Mostrar "Cargando..."
+        loading_label = ctk.CTkLabel(
+            scroll,
+            text=t("update.loading"),
+            font=("Segoe UI", 14),
+            text_color=COLORS["text_light"]
+        )
+        loading_label.pack(pady=40)
+
+        # Cargar changelog en background
+        def _fetch_changelog():
+            try:
+                import requests
+                resp = requests.get(
+                    f"{self.pampa.api_url}/api/v1/version/WELCOME_X",
+                    timeout=5
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    full_changelog = data.get("full_changelog", [])
+                    d.after(0, lambda: _render_changelog(full_changelog))
+                else:
+                    d.after(0, lambda: _render_error())
+            except:
+                d.after(0, lambda: _render_error())
+
+        def _render_error():
+            loading_label.configure(text=t("update.error_loading"))
+
+        def _render_changelog(changelog):
+            loading_label.destroy()
+            lang = get_language()
+
+            type_labels = {
+                "release": {"text": t("update.type_release"), "color": "#10b981"},
+                "update": {"text": t("update.type_update"), "color": "#3b82f6"},
+                "fix": {"text": t("update.type_fix"), "color": "#f59e0b"},
+            }
+
+            for i, entry in enumerate(changelog):
+                ver = entry.get("version", "?")
+                date = entry.get("date", "")
+                entry_type = entry.get("type", "update")
+                changes = entry.get("changes", {})
+                items = changes.get(lang, changes.get("es", []))
+
+                is_current = (ver == APP_VERSION)
+                is_latest = (i == 0)
+
+                # Card por versión
+                card = ctk.CTkFrame(scroll, fg_color=COLORS["card"], corner_radius=12)
+                card.pack(fill="x", padx=15, pady=(10 if i > 0 else 15, 5))
+
+                # Header del card: versión + badge + fecha
+                card_header = ctk.CTkFrame(card, fg_color="transparent")
+                card_header.pack(fill="x", padx=20, pady=(15, 5))
+
+                ver_text = f"v{ver}"
+                ctk.CTkLabel(
+                    card_header,
+                    text=ver_text,
+                    font=("Segoe UI", 18, "bold"),
+                    text_color="#d4af37" if is_latest else COLORS["text"]
+                ).pack(side="left")
+
+                # Badge de tipo
+                tipo_info = type_labels.get(entry_type, type_labels["update"])
+                badge = ctk.CTkLabel(
+                    card_header,
+                    text=f"  {tipo_info['text']}  ",
+                    font=("Segoe UI", 11, "bold"),
+                    fg_color=tipo_info["color"],
+                    corner_radius=6,
+                    text_color="white"
+                )
+                badge.pack(side="left", padx=10)
+
+                # Badge "instalada" si es la versión actual
+                if is_current:
+                    installed_badge = ctk.CTkLabel(
+                        card_header,
+                        text=f"  {t('update.installed')}  ",
+                        font=("Segoe UI", 11, "bold"),
+                        fg_color="#6b7280",
+                        corner_radius=6,
+                        text_color="white"
+                    )
+                    installed_badge.pack(side="left", padx=5)
+
+                # Fecha
+                if date:
+                    ctk.CTkLabel(
+                        card_header,
+                        text=date,
+                        font=("Segoe UI", 12),
+                        text_color=COLORS["text_light"]
+                    ).pack(side="right")
+
+                # Lista de cambios
+                changes_frame = ctk.CTkFrame(card, fg_color="transparent")
+                changes_frame.pack(fill="x", padx=20, pady=(5, 15))
+
+                for item in items:
+                    item_frame = ctk.CTkFrame(changes_frame, fg_color="transparent")
+                    item_frame.pack(fill="x", pady=2)
+
+                    ctk.CTkLabel(
+                        item_frame,
+                        text="  •",
+                        font=("Segoe UI", 13),
+                        text_color="#d4af37",
+                        width=25
+                    ).pack(side="left", anchor="n")
+
+                    ctk.CTkLabel(
+                        item_frame,
+                        text=item,
+                        font=("Segoe UI", 13),
+                        text_color=COLORS["text"],
+                        anchor="w",
+                        wraplength=480
+                    ).pack(side="left", fill="x", expand=True)
+
+                # Botón descargar si hay versión nueva
+                if is_latest and not is_current and self.update_info:
+                    btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+                    btn_frame.pack(fill="x", padx=20, pady=(0, 15))
+
+                    dl_url = self.update_info.get("download_url", "")
+                    ctk.CTkButton(
+                        btn_frame,
+                        text=f"{t('update.download_btn')} v{ver}",
+                        height=36,
+                        fg_color="#10b981", hover_color="#059669",
+                        font=("Segoe UI", 13, "bold"),
+                        command=lambda url=dl_url: webbrowser.open(url)
+                    ).pack(fill="x")
+
+            # Padding final
+            ctk.CTkLabel(scroll, text="", height=10).pack()
+
+        threading.Thread(target=_fetch_changelog, daemon=True).start()
+
+        # Botón cerrar
+        btn_frame = ctk.CTkFrame(d, fg_color=COLORS["bg"], height=60)
+        btn_frame.pack(fill="x", side="bottom")
+        ctk.CTkButton(
+            btn_frame,
+            text=t("common.close"),
+            width=150, height=40,
+            fg_color=COLORS["border"],
+            hover_color=COLORS["hover"],
+            command=d.destroy
+        ).pack(pady=10)
 
     # ============================================
     # UTILIDADES
@@ -1825,6 +2030,11 @@ class WelcomeXApp(ctk.CTk):
                      fg_color="transparent", hover_color=COLORS["hover"]).pack(pady=5)
 
         ctk.CTkButton(sidebar, text=f"⚙️ {t('sidebar.settings')}", command=self.mostrar_configuracion,
+                     width=230, height=50, anchor="w", font=("Arial", 14),
+                     fg_color="transparent", hover_color=COLORS["hover"]).pack(pady=5)
+
+        ctk.CTkButton(sidebar, text=f"🔄 {t('sidebar.updates')}",
+                     command=self.mostrar_ventana_updates,
                      width=230, height=50, anchor="w", font=("Arial", 14),
                      fg_color="transparent", hover_color=COLORS["hover"]).pack(pady=5)
 
