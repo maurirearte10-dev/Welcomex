@@ -5,6 +5,7 @@ Soporte para Español, English, Português
 
 import json
 import os
+import sys
 
 SUPPORTED_LANGUAGES = ["es", "en", "pt"]
 LANGUAGE_NAMES = {
@@ -17,8 +18,15 @@ DEFAULT_LANGUAGE = "es"
 _translations = {}
 _current_lang = DEFAULT_LANGUAGE
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LOCALES_DIR = os.path.join(BASE_DIR, "locales")
+# Detectar directorio correcto para locales (empaquetado vs desarrollo)
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # Empaquetado como .exe: recursos dentro del bundle
+    _RESOURCE_DIR = sys._MEIPASS
+else:
+    # Desarrollo: directorio del proyecto
+    _RESOURCE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+LOCALES_DIR = os.path.join(_RESOURCE_DIR, "locales")
 
 
 def load_translations():

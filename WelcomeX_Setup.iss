@@ -1,16 +1,17 @@
 ; Script Inno Setup para WelcomeX
-; Crear instalador profesional con todo incluido
+; Instalador profesional con acceso directo, desinstalador y todo incluido
 
 #define MyAppName "WelcomeX"
-#define MyAppVersion "4.9"
-#define MyAppPublisher "PampaGuazú"
-#define MyAppURL "https://pampaguazu.com"
+#define MyAppVersion "1.0.1"
+#define MyAppPublisher "Pampa Guazú"
+#define MyAppURL "https://pampaguazu.com.ar"
 #define MyAppExeName "WelcomeX.exe"
 
 [Setup]
 AppId={{E5C8F9A1-2B3D-4E5F-6A7B-8C9D0E1F2A3B}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} v{#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
@@ -20,52 +21,49 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 LicenseFile=LICENSE.txt
 OutputDir=installers
-OutputBaseFilename=WelcomeX_Setup_v4.9
+OutputBaseFilename=WelcomeX_Setup_v{#MyAppVersion}
 SetupIconFile=assets\icon.ico
-Compression=lzma
+UninstallDisplayIcon={app}\assets\icon.ico
+UninstallDisplayName={#MyAppName}
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
+; Ejecutable principal
 Source: "dist\WelcomeX.exe"; DestDir: "{app}"; Flags: ignoreversion
+
+; Assets (icono, logo)
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "config\*"; DestDir: "{app}\config"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
-; NOTE: No incluir carpeta data (se crea automáticamente)
+
+; Plantilla Excel
+Source: "PLANTILLA_INVITADOS_WELCOMEX.xlsx"; DestDir: "{app}"; Flags: ignoreversion
+
+; Licencia
+Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+; Menu Inicio
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+; Escritorio
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
-[Code]
-function InitializeSetup(): Boolean;
-var
-  ResultCode: Integer;
-  VLCInstalled: Boolean;
-begin
-  Result := True;
-  
-  // Verificar si VLC está instalado
-  VLCInstalled := FileExists('C:\Program Files\VideoLAN\VLC\vlc.exe') or 
-                   FileExists('C:\Program Files (x86)\VideoLAN\VLC\vlc.exe');
-  
-  if not VLCInstalled then
-  begin
-    if MsgBox('Para reproducir audio en los videos, necesitas VLC Media Player instalado.' + #13#10 + #13#10 +
-              '¿Deseas descargarlo ahora?', mbConfirmation, MB_YESNO) = IDYES then
-    begin
-      ShellExec('open', 'https://www.videolan.org/vlc/', '', '', SW_SHOW, ewNoWait, ResultCode);
-    end;
-  end;
-end;
+[UninstallDelete]
+; Limpiar archivos creados durante el uso (logs, cache)
+Type: filesandordirs; Name: "{app}\data"
+Type: filesandordirs; Name: "{app}\__pycache__"

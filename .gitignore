@@ -1,7 +1,7 @@
 # Build files
 build/
 dist/
-*.spec
+installers/
 
 # Python
 __pycache__/
