@@ -5,7 +5,7 @@ from PyInstaller.utils.hooks import collect_all
 # NO incluir data (se crea junto al .exe para la base de datos)
 datas = [('assets', 'assets'), ('config', 'config'), ('locales', 'locales'), ('demo_videos', 'demo_videos')]
 binaries = []
-hiddenimports = ['PIL._tkinter_finder', 'pynput.keyboard']
+hiddenimports = ['PIL._tkinter_finder', 'pynput.keyboard', 'jwt']
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 

@@ -2,7 +2,7 @@
 ; Instalador profesional con acceso directo, desinstalador y todo incluido
 
 #define MyAppName "WelcomeX"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Pampa Guazú"
 #define MyAppURL "https://pampaguazu.com.ar"
 #define MyAppExeName "WelcomeX.exe"
@@ -30,6 +30,9 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+CloseApplications=force
+CloseApplicationsFilter=WelcomeX.exe
+RestartApplications=no
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
@@ -42,13 +45,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; Ejecutable principal
 Source: "dist\WelcomeX.exe"; DestDir: "{app}"; Flags: ignoreversion
-
 ; Assets (icono, logo)
 Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
-
 ; Plantilla Excel
 Source: "PLANTILLA_INVITADOS_WELCOMEX.xlsx"; DestDir: "{app}"; Flags: ignoreversion
-
 ; Licencia
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -56,7 +56,6 @@ Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; Menu Inicio
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-
 ; Escritorio
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"; Tasks: desktopicon
 
@@ -67,3 +66,25 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 ; Limpiar archivos creados durante el uso (logs, cache)
 Type: filesandordirs; Name: "{app}\data"
 Type: filesandordirs; Name: "{app}\__pycache__"
+
+[Code]
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  // Matar WelcomeX.exe si esta corriendo (forzado)
+  Exec('taskkill', '/F /IM WelcomeX.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // Esperar un momento para que el proceso termine completamente
+  Sleep(1000);
+  Result := True;
+end;
+
+function InitializeUninstall(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  // Tambien matar al desinstalar
+  Exec('taskkill', '/F /IM WelcomeX.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1000);
+  Result := True;
+end;

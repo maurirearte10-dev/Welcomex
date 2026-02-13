@@ -42,3 +42,35 @@ demo_videos/*.mp4
 
 # Windows artifacts
 nul
+
+# Guías y docs generados (no son parte del código)
+COMO_GENERAR_QR.md
+COMPILAR_EXE.md
+CONFIGURAR_PISTOLAS_HARDWARE.md
+DEBUGGING_ZIP_VACIO.md
+GUIA_*.md
+IMPLEMENTACION_*.md
+INTEGRACION_WEB.md
+LICENCIAS_README.md
+MODO_DEMO.md
+ORIENTACIONES_KIOSCO.md
+PERSONALIZAR_SPLASH.md
+PISTOLAS_RESUMEN.md
+README_COMPILAR.txt
+README_FINAL.md
+REPRODUCTOR_VIDEO.md
+SOLUCION_*.md
+TROUBLESHOOTING_*.md
+VIDEOS_POR_MESA.md
+INSTRUCCIONES_COMPILAR.txt
+
+# Scripts auxiliares de debug
+reset_eventos_demo.py
+ver_eventos_demo.py
+ver_invitados_demo.py
+
+# Scripts de build (locales)
+BUILD_EXE.bat
+COMPILAR.bat
+INSTALAR.bat
+SETUP.bat

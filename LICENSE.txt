@@ -1,5 +1,5 @@
 ACUERDO DE LICENCIA DE SOFTWARE
-WelcomeX v4.9
+WelcomeX v1.1.0
 
 Copyright (c) 2026 PampaGuazú - Todos los derechos reservados
 
@@ -27,9 +27,9 @@ TÉRMINOS Y CONDICIONES:
    Para uso completo, debe adquirir una licencia.
 
 Para más información o adquirir una licencia:
-Web: https://pampaguazu.com
-Email: contacto@pampaguazu.com
-WhatsApp: [Tu número]
+Web: https://pampaguazu.com.ar
+Email: info@pampaguazu.com.ar
+WhatsApp: +54 9 11 7082-1540
 
 ---
 
@@ -45,4 +45,4 @@ REQUISITOS DEL SISTEMA:
 
 WelcomeX - Sistema de Gestión de Eventos
 Desarrollado por PampaGuazú
-Versión 4.9 - Enero 2026
+Versión 1.1.0 - Febrero 2026

@@ -75,14 +75,19 @@ class WelcomeXApp(ctk.CTk):
         license_status = self.verificar_licencia_startup()
 
         if license_status == "valid":
+            # Verificar integridad del reloj al inicio
+            self.after(3000, self._verificar_reloj_startup)
             # Licencia válida → Login normal
             self.mostrar_login()
         elif license_status == "demo_active":
             # Trial demo activo → Login con usuario demo
             self.mostrar_login_demo()
         elif license_status == "requires_connection":
-            # Requiere conexión a internet para validación mensual
+            # Requiere conexión a internet (offline >48h o migración)
             self.mostrar_requiere_conexion()
+        elif license_status == "hardware_replaced":
+            # Licencia fue activada en otra PC
+            self.mostrar_hardware_reemplazado()
         else:
             # Sin licencia ni trial → Mostrar opciones
             self.mostrar_opciones_inicio()
@@ -90,6 +95,56 @@ class WelcomeXApp(ctk.CTk):
         # Chequear actualizaciones en background (no bloquea el inicio)
         self.after(2000, self._check_for_updates)
     
+    # ============================================
+    # VERIFICACIÓN DE RELOJ
+    # ============================================
+
+    def _verificar_reloj_startup(self):
+        """Verifica integridad del reloj del sistema al iniciar"""
+        import threading
+        def _check():
+            try:
+                result = self.pampa.check_time_integrity()
+                if not result["ok"]:
+                    self.after(0, lambda: self._mostrar_advertencia_reloj(
+                        result["warning"]
+                    ))
+            except Exception as e:
+                print(f"[WelcomeX] Error verificando reloj: {e}")
+        threading.Thread(target=_check, daemon=True).start()
+
+    def _mostrar_advertencia_reloj(self, warning: str):
+        """Muestra advertencia de manipulación de reloj"""
+        d = ctk.CTkToplevel(self)
+        d.title("Advertencia de Reloj")
+        d.geometry("550x300")
+        d.transient(self)
+        d.grab_set()
+
+        x = (d.winfo_screenwidth() - 550) // 2
+        y = (d.winfo_screenheight() - 300) // 2
+        d.geometry(f"+{x}+{y}")
+
+        frame = ctk.CTkFrame(d, fg_color=COLORS["card"])
+        frame.pack(expand=True, fill="both", padx=20, pady=20)
+
+        ctk.CTkLabel(frame, text="⚠️ Advertencia de Reloj",
+                    font=("Arial", 22, "bold"),
+                    text_color=COLORS["warning"]).pack(pady=(10, 15))
+
+        ctk.CTkLabel(frame, text=warning,
+                    font=("Arial", 13), text_color=COLORS["text_light"],
+                    wraplength=450, justify="center").pack(pady=(0, 10))
+
+        ctk.CTkLabel(frame,
+                    text="Ajusta el reloj de tu sistema a la hora correcta.\n"
+                         "El uso con reloj incorrecto quedará registrado.",
+                    font=("Arial", 12), text_color=COLORS["text_light"],
+                    wraplength=450, justify="center").pack(pady=(0, 20))
+
+        ctk.CTkButton(frame, text="Entendido", command=d.destroy,
+                     height=45, width=180, font=("Arial", 14)).pack()
+
     # ============================================
     # ACTUALIZACIONES
     # ============================================
@@ -471,8 +526,8 @@ class WelcomeXApp(ctk.CTk):
         if rol == 'super_admin':
             return True
 
-        # 'cliente' tiene los mismos permisos que 'admin'
-        if rol == 'cliente':
+        # 'cliente' o 'client' tienen los mismos permisos que 'admin'
+        if rol in ('cliente', 'client'):
             rol = 'admin'
 
         # Verificar en matriz de permisos
@@ -939,14 +994,22 @@ class WelcomeXApp(ctk.CTk):
         if license_key:
             result = self.pampa.validate_license(license_key, force_online=False)
             if result and result.get('valid'):
-                dias = result.get('days_remaining', 0)
+                dias = result.get('days_remaining') or 0
                 expira = result.get('expires_at', 'N/A')
 
+                # Formatear fecha de vencimiento (dd/mm/yyyy)
+                expira_display = 'N/A'
+                if expira and expira != 'N/A':
+                    try:
+                        expira_display = datetime.fromisoformat(expira).strftime('%d/%m/%Y')
+                    except:
+                        expira_display = expira[:10]
+
                 # Color según días restantes
-                if dias > 30:
+                if dias is not None and dias > 30:
                     color_estado = COLORS["success"]
                     icono = "✅"
-                elif dias > 7:
+                elif dias is not None and dias > 7:
                     color_estado = COLORS["warning"]
                     icono = "⚠️"
                 else:
@@ -962,7 +1025,7 @@ class WelcomeXApp(ctk.CTk):
                             font=("Arial", 16, "bold"), text_color=color_estado).pack(anchor="w")
                 ctk.CTkLabel(info_content, text=t("config.days_remaining", days=dias),
                             font=("Arial", 14), text_color=COLORS["text_light"]).pack(anchor="w", pady=(5, 0))
-                ctk.CTkLabel(info_content, text=t("config.expires", date=expira[:10] if expira != 'N/A' else 'N/A'),
+                ctk.CTkLabel(info_content, text=t("config.expires", date=expira_display),
                             font=("Arial", 14), text_color=COLORS["text_light"]).pack(anchor="w")
 
                 # Botón renovar/extender
@@ -970,6 +1033,17 @@ class WelcomeXApp(ctk.CTk):
                             command=self.gestionar_suscripcion,
                             height=45, width=300, font=("Arial", 14, "bold"),
                             fg_color=COLORS["primary"]).pack(pady=(10, 0))
+
+                # Botón liberar licencia (solo si está habilitado)
+                allow_release = db.get_config("allow_self_release")
+                if allow_release == "1":
+                    ctk.CTkButton(lic_inner, text="🔓 Liberar licencia en este equipo",
+                                command=self._liberar_licencia,
+                                height=40, width=300, font=("Arial", 12),
+                                fg_color="transparent", border_width=1,
+                                border_color=COLORS["danger"],
+                                text_color=COLORS["danger"],
+                                hover_color=COLORS["danger"] + "20").pack(pady=(10, 0))
             else:
                 ctk.CTkLabel(lic_inner, text=f"❌ {t('config.license_expired')}",
                             font=("Arial", 15), text_color=COLORS["danger"]).pack(anchor="w")
@@ -996,6 +1070,43 @@ class WelcomeXApp(ctk.CTk):
                         command=self.activar_licencia_dialog,
                         height=45, width=280, font=("Arial", 14, "bold"),
                         fg_color=COLORS["success"]).pack(pady=(10, 0))
+
+        # ====================
+        # 1.5 SEGURIDAD (solo admin/super_admin)
+        # ====================
+        if self.tiene_permiso('editar_eventos'):
+            seguridad_card = ctk.CTkFrame(self.content, fg_color=COLORS["card"], corner_radius=10)
+            seguridad_card.pack(fill="x", pady=(0, 15))
+
+            seg_inner = ctk.CTkFrame(seguridad_card, fg_color="transparent")
+            seg_inner.pack(fill="x", padx=25, pady=20)
+
+            ctk.CTkLabel(seg_inner, text="🛡️ Seguridad",
+                        font=("Arial", 20, "bold")).pack(anchor="w", pady=(0, 15))
+
+            # Toggle permitir autoliberación
+            release_frame = ctk.CTkFrame(seg_inner, fg_color="transparent")
+            release_frame.pack(fill="x", pady=5)
+
+            ctk.CTkLabel(release_frame, text="Permitir liberar licencia desde este equipo:",
+                        font=("Arial", 14)).pack(side="left")
+
+            current_release = db.get_config("allow_self_release") == "1"
+
+            release_switch = ctk.CTkSwitch(
+                release_frame, text="",
+                onvalue="1", offvalue="0",
+                command=lambda: self._toggle_self_release(release_switch)
+            )
+            if current_release:
+                release_switch.select()
+            release_switch.pack(side="right", padx=10)
+
+            ctk.CTkLabel(seg_inner,
+                        text="Si está activado, podrás liberar la licencia de este equipo\n"
+                             "para activarla en otro. Máximo 3 liberaciones por mes.",
+                        font=("Arial", 11), text_color=COLORS["text_light"],
+                        justify="left").pack(anchor="w", pady=(5, 0))
 
         # ====================
         # 2. APARIENCIA
@@ -2095,7 +2206,10 @@ class WelcomeXApp(ctk.CTk):
         
         # Mostrar contenido inicial
         self.mostrar_eventos()
-    
+
+        # Iniciar validación silenciosa cada 6 horas (solo si tiene licencia, no demo)
+        self._iniciar_validacion_silenciosa()
+
     # ============================================
     # EVENTOS
     # ============================================
@@ -2173,7 +2287,17 @@ class WelcomeXApp(ctk.CTk):
             if not result:
                 return
 
-            dias = result.get('days_remaining', 0)
+            dias = result.get('days_remaining')
+            if dias is None:
+                # Calcular desde expires_at si el servidor no lo envió
+                expires_at_str = result.get('expires_at')
+                if expires_at_str:
+                    try:
+                        dias = max(0, (datetime.fromisoformat(expires_at_str) - datetime.now()).days)
+                    except:
+                        dias = 0
+                else:
+                    dias = 0
             status = result.get('status', 'unknown')
 
             # Determinar estado visual
@@ -4050,8 +4174,8 @@ class WelcomeXApp(ctk.CTk):
             try:
                 from datetime import datetime
                 venc = datetime.fromisoformat(lic['fecha_vencimiento'])
-                dias_restantes = (venc - datetime.now()).days
-                
+                dias_restantes = max(0, (venc - datetime.now()).days)
+
                 color = COLORS["success"] if dias_restantes > 7 else COLORS["warning"] if dias_restantes > 0 else COLORS["danger"]
                 ctk.CTkLabel(inner, text=f"Vence: {venc.strftime('%d/%m/%Y')} ({dias_restantes}d)",
                             text_color=color, font=("Arial", 13)).pack(side="right")
@@ -4777,40 +4901,53 @@ class WelcomeXApp(ctk.CTk):
     def verificar_licencia_startup(self) -> str:
         """
         Verifica licencia o trial demo al iniciar
-        Returns: "valid" | "demo_active" | "expired" | "none" | "requires_connection"
+        Returns: "valid" | "demo_active" | "expired" | "none" | "requires_connection" | "hardware_replaced"
         """
+        from config.settings import APP_VERSION
+
         # 1. Verificar licencia PAMPA
         license_key = self.cargar_license_key()
 
         if license_key:
             print(f"[WelcomeX] Validando licencia con PAMPA...")
 
-            # Verificar si el cache expiró (>30 días sin validación online)
-            validation_info = self.pampa.get_validation_info()
-            cache_expired = validation_info.get("requires_connection", True)
-
-            if cache_expired:
-                print("[WelcomeX] ⚠️ Validación mensual requerida - conectando a internet...")
-
-            result = self.pampa.validate_license(license_key)
+            result = self.pampa.validate_license(license_key, app_version=APP_VERSION)
 
             if result['valid']:
                 print(f"[WelcomeX] ✅ Licencia válida - {result['message']}")
+
+                # Mostrar info offline si está en modo offline
+                hours_offline = result.get('hours_offline')
+                if hours_offline and hours_offline > 0:
+                    hours_remaining = result.get('hours_remaining', 0)
+                    print(f"[WelcomeX] Modo offline: {hours_offline:.0f}h usadas, {hours_remaining:.0f}h restantes")
 
                 # Verificar alertas de vencimiento
                 alert = self.pampa.check_expiration_alerts(license_key)
                 if alert:
                     self.after(1000, lambda: self.mostrar_alerta_vencimiento(alert))
 
-                # Mostrar info de próxima validación si quedan pocos días
-                self.after(1500, self.mostrar_info_validacion_mensual)
-
                 return "valid"
             else:
-                # Si el cache expiró y hay error de conexión, mostrar pantalla especial
-                if cache_expired and result.get('status') == 'connection_error':
-                    print(f"[WelcomeX] ❌ Requiere conexión a internet para validación mensual")
+                status = result.get('status', '')
+
+                # Límite offline superado
+                if status == 'offline_limit':
+                    print(f"[WelcomeX] ❌ Límite offline superado")
                     return "requires_connection"
+
+                # Hardware no coincide (token copiado o licencia activada en otra PC)
+                if status in ('hardware_mismatch', 'hardware_replaced'):
+                    print(f"[WelcomeX] ❌ Licencia activada en otro equipo")
+                    return "hardware_replaced"
+
+                # Error de conexión sin token válido
+                if status == 'connection_error':
+                    # Verificar si hay token local todavía utilizable
+                    validation_info = self.pampa.get_validation_info()
+                    if validation_info.get("requires_connection", True):
+                        print(f"[WelcomeX] ❌ Requiere conexión a internet")
+                        return "requires_connection"
 
                 print(f"[WelcomeX] ❌ Licencia inválida: {result['message']}")
                 return "expired"
@@ -4896,7 +5033,7 @@ class WelcomeXApp(ctk.CTk):
                 # Guardar licencia
                 self.guardar_license_key(license_key)
 
-                dias = result.get('days_remaining', 0)
+                dias = result.get('days_remaining') or 0
                 msg_label.configure(
                     text=f"✅ Licencia activada! Vence en {dias} días.",
                     text_color=COLORS["success"]
@@ -5004,6 +5141,173 @@ class WelcomeXApp(ctk.CTk):
                      height=45, width=200, fg_color="transparent",
                      border_width=2, border_color=COLORS["border"],
                      font=("Arial", 14)).pack()
+
+    def mostrar_hardware_reemplazado(self):
+        """Pantalla cuando la licencia fue activada en otro equipo"""
+        self.limpiar_ventana()
+
+        container = ctk.CTkFrame(self, fg_color=COLORS["bg"])
+        container.pack(expand=True, fill="both")
+
+        frame = ctk.CTkFrame(container, fg_color=COLORS["card"], corner_radius=15)
+        frame.place(relx=0.5, rely=0.5, anchor="center")
+
+        inner = ctk.CTkFrame(frame, fg_color="transparent")
+        inner.pack(padx=60, pady=50)
+
+        ctk.CTkLabel(inner, text="💻", font=("Arial", 60)).pack(pady=(0, 15))
+
+        ctk.CTkLabel(inner, text="Licencia activa en otro equipo",
+                    font=("Arial", 28, "bold")).pack(pady=(0, 10))
+
+        ctk.CTkLabel(inner,
+                    text="Esta licencia fue activada en otra computadora.\n"
+                         "Solo se permite 1 equipo activo por licencia.\n\n"
+                         "Si deseas usar la licencia en este equipo,\n"
+                         "primero libérala desde el otro equipo.",
+                    font=("Arial", 14), text_color=COLORS["text_light"],
+                    justify="center", wraplength=450).pack(pady=(0, 30))
+
+        def reintentar():
+            self.limpiar_ventana()
+            license_status = self.verificar_licencia_startup()
+            if license_status == "valid":
+                self.mostrar_login()
+            elif license_status == "hardware_replaced":
+                self.mostrar_hardware_reemplazado()
+            elif license_status == "requires_connection":
+                self.mostrar_requiere_conexion()
+            else:
+                self.mostrar_opciones_inicio()
+
+        ctk.CTkButton(inner, text="🔄 Reintentar", command=reintentar,
+                     height=50, width=280, font=("Arial", 16, "bold"),
+                     fg_color=COLORS["primary"]).pack(pady=(0, 15))
+
+        ctk.CTkButton(inner, text="Salir", command=self.destroy,
+                     height=45, width=200, fg_color="transparent",
+                     border_width=2, border_color=COLORS["border"],
+                     font=("Arial", 14)).pack()
+
+    def _iniciar_validacion_silenciosa(self):
+        """Inicia el timer de validación silenciosa cada 6 horas"""
+        if self.es_modo_demo():
+            return  # No validar en modo demo
+
+        license_key = self.cargar_license_key()
+        if not license_key:
+            return
+
+        def validar_silencioso():
+            try:
+                result = self.pampa.silent_refresh(license_key)
+                if not result.get('valid') and result.get('status') not in ('offline', 'refresh_error'):
+                    # Licencia invalidada: reemplazada, revocada, vencida
+                    status = result.get('status', '')
+                    print(f"[WelcomeX] Validación silenciosa falló: {status}")
+                    if status == 'hardware_replaced':
+                        self.mostrar_hardware_reemplazado()
+                    elif status == 'revoked':
+                        self.mostrar_requiere_conexion()
+                    elif status == 'expired':
+                        self.mostrar_requiere_conexion()
+                else:
+                    print("[WelcomeX] Validación silenciosa OK")
+            except Exception as e:
+                print(f"[WelcomeX] Error en validación silenciosa: {e}")
+
+            # Reprogramar para 6 horas después (21600000 ms)
+            self.after(21600000, validar_silencioso)
+
+        # Primera validación silenciosa en 5 minutos (300000 ms)
+        self.after(300000, validar_silencioso)
+
+    def _toggle_self_release(self, switch):
+        """Activa/desactiva la opción de autoliberación"""
+        valor = switch.get()
+        db.connect()
+        try:
+            db.cursor.execute("""
+                INSERT INTO configuracion (clave, valor)
+                VALUES (?, ?)
+                ON CONFLICT(clave) DO UPDATE SET valor = ?
+            """, ('allow_self_release', valor, valor))
+            db.connection.commit()
+        except:
+            pass
+        db.disconnect()
+
+    def _liberar_licencia(self):
+        """Liberar la licencia de este equipo"""
+        from config.settings import APP_VERSION
+
+        # Confirmación
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Liberar Licencia")
+        dialog.geometry("500x300")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        x = (dialog.winfo_screenwidth() - 500) // 2
+        y = (dialog.winfo_screenheight() - 300) // 2
+        dialog.geometry(f"+{x}+{y}")
+
+        frame = ctk.CTkFrame(dialog, fg_color=COLORS["card"])
+        frame.pack(expand=True, fill="both", padx=20, pady=20)
+
+        ctk.CTkLabel(frame, text="⚠️ Liberar Licencia",
+                    font=("Arial", 22, "bold"), text_color=COLORS["warning"]).pack(pady=(10, 15))
+
+        ctk.CTkLabel(frame,
+                    text="¿Estás seguro de liberar la licencia en este equipo?\n\n"
+                         "Este equipo no podrá usar la licencia sin reactivación.\n"
+                         "Podrás activarla en otro equipo.",
+                    font=("Arial", 13), text_color=COLORS["text_light"],
+                    justify="center", wraplength=400).pack(pady=(0, 20))
+
+        btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        btn_frame.pack()
+
+        def confirmar():
+            license_key = self.cargar_license_key()
+            if not license_key:
+                dialog.destroy()
+                return
+
+            result = self.pampa.release_license(license_key, app_version=APP_VERSION)
+
+            if result.get('success'):
+                # Borrar license_key del config local
+                db.connect()
+                try:
+                    db.cursor.execute("DELETE FROM configuracion WHERE clave = 'license_key'")
+                    db.connection.commit()
+                except:
+                    pass
+                db.disconnect()
+
+                dialog.destroy()
+
+                # Mostrar confirmación y volver a opciones de inicio
+                from tkinter import messagebox
+                messagebox.showinfo("Licencia Liberada",
+                                   "La licencia fue liberada correctamente.\n"
+                                   "Puedes activarla en otro equipo.")
+                self.mostrar_opciones_inicio()
+            else:
+                from tkinter import messagebox
+                messagebox.showerror("Error",
+                                    result.get('message', 'Error al liberar la licencia'))
+
+        ctk.CTkButton(btn_frame, text="Liberar", command=confirmar,
+                     width=150, height=45, fg_color=COLORS["danger"],
+                     hover_color="#c53030", font=("Arial", 14, "bold")).pack(side="left", padx=10)
+
+        ctk.CTkButton(btn_frame, text="Cancelar", command=dialog.destroy,
+                     width=150, height=45, fg_color="transparent",
+                     border_width=2, border_color=COLORS["border"],
+                     font=("Arial", 14)).pack(side="left", padx=10)
 
     def mostrar_info_validacion_mensual(self):
         """Muestra info discreta sobre la próxima validación si faltan pocos días"""

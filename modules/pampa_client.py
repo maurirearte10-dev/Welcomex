@@ -1,5 +1,5 @@
 """
-PAMPA Client - Módulo de validación de licencias
+PAMPA Client - Módulo de validación de licencias con JWT
 Para integrar en WelcomeX, Tauro360, Clickear, etc.
 """
 import requests
@@ -8,32 +8,38 @@ import uuid
 import subprocess
 import hashlib
 import json
+import socket
+import jwt
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict
 
+# Límite offline en horas (debe coincidir con el servidor)
+OFFLINE_LIMIT_HOURS = 48
+
+
 class PampaClient:
-    """Cliente para validar licencias con PAMPA"""
+    """Cliente para validar licencias con PAMPA usando tokens JWT"""
 
     def __init__(self, program_code: str, api_url: str = "https://pampaguazu.com.ar"):
-        """
-        Args:
-            program_code: Código del programa (WELCOME_X, TAURO_360, etc.)
-            api_url: URL del servidor PAMPA
-        """
         self.program_code = program_code
         self.api_url = api_url.rstrip('/')
 
-        # Cache local
-        self.cache_file = Path.home() / ".pampa" / f"{program_code}_license.json"
-        self.cache_file.parent.mkdir(exist_ok=True)
+        # Token JWT local
+        self.token_file = Path.home() / ".pampa" / f"{program_code}_token.jwt"
+        self.token_file.parent.mkdir(exist_ok=True)
+
+        # Cache viejo (para migración)
+        self.old_cache_file = Path.home() / ".pampa" / f"{program_code}_license.json"
+
+        # Archivo de timestamp para detección de manipulación de reloj
+        self.timestamp_file = Path.home() / ".pampa" / f"{program_code}_lasttime.dat"
 
     # ==============================================
     # HARDWARE FINGERPRINT
     # ==============================================
 
     def get_cpu_id(self) -> str:
-        """Obtiene ID de CPU"""
         try:
             if platform.system() == "Windows":
                 result = subprocess.check_output(
@@ -41,13 +47,11 @@ class PampaClient:
                 ).decode().strip().split('\n')[1].strip()
                 return result
             else:
-                # Linux/Mac
                 return str(uuid.getnode())
         except:
             return "CPU_UNKNOWN"
 
     def get_motherboard_serial(self) -> str:
-        """Obtiene serial de motherboard"""
         try:
             if platform.system() == "Windows":
                 result = subprocess.check_output(
@@ -60,7 +64,6 @@ class PampaClient:
             return "MB_UNKNOWN"
 
     def get_disk_serial(self) -> str:
-        """Obtiene serial del disco principal"""
         try:
             if platform.system() == "Windows":
                 result = subprocess.check_output(
@@ -73,16 +76,14 @@ class PampaClient:
             return "DISK_UNKNOWN"
 
     def get_mac_address(self) -> str:
-        """Obtiene MAC address"""
         try:
             mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff)
-                           for elements in range(0,2*6,2)][::-1])
+                           for elements in range(0, 2*6, 2)][::-1])
             return mac
         except:
             return "MAC_UNKNOWN"
 
     def get_system_uuid(self) -> str:
-        """Obtiene UUID del sistema"""
         try:
             if platform.system() == "Windows":
                 result = subprocess.check_output(
@@ -95,12 +96,6 @@ class PampaClient:
             return str(uuid.uuid4())
 
     def get_hardware_fingerprint(self) -> Dict[str, str]:
-        """
-        Obtiene los 5 identificadores de hardware
-
-        Returns:
-            Dict con cpu_id, motherboard_serial, disk_serial, mac_address, system_uuid
-        """
         return {
             "cpu_id": self.get_cpu_id(),
             "motherboard_serial": self.get_motherboard_serial(),
@@ -109,91 +104,251 @@ class PampaClient:
             "system_uuid": self.get_system_uuid()
         }
 
+    def get_hardware_hash(self) -> str:
+        """Genera hash SHA256 del hardware (debe coincidir con el servidor)"""
+        hw = self.get_hardware_fingerprint()
+        data = f"{hw['cpu_id']}|{hw['motherboard_serial']}|{hw['disk_serial']}|{hw['mac_address']}|{hw['system_uuid']}"
+        return hashlib.sha256(data.encode()).hexdigest()
+
+    def get_machine_name(self) -> str:
+        try:
+            return socket.gethostname()
+        except:
+            return "Desconocido"
+
     # ==============================================
-    # CACHE LOCAL
+    # TOKEN JWT LOCAL
     # ==============================================
 
-    def save_cache(self, license_key: str, validation_result: dict):
-        """Guarda validación en cache local"""
-        cache_data = {
-            "license_key": license_key,
-            "program_code": self.program_code,
-            "last_validation": datetime.now().isoformat(),
-            "valid": validation_result.get("valid", False),
-            "status": validation_result.get("status"),
-            "expires_at": validation_result.get("expires_at"),
-            "days_remaining": validation_result.get("days_remaining"),
-            "message": validation_result.get("message")
-        }
+    def save_token(self, token_str: str):
+        """Guarda el JWT en archivo local"""
+        with open(self.token_file, 'w') as f:
+            f.write(token_str)
+        # Eliminar cache viejo si existe (migración)
+        if self.old_cache_file.exists():
+            try:
+                self.old_cache_file.unlink()
+                print("[PAMPA] Cache viejo eliminado (migración a JWT)")
+            except:
+                pass
 
-        with open(self.cache_file, 'w') as f:
-            json.dump(cache_data, f, indent=2)
+    def load_token_raw(self) -> Optional[str]:
+        """Carga el JWT raw (string) del archivo"""
+        if not self.token_file.exists():
+            return None
+        try:
+            with open(self.token_file, 'r') as f:
+                return f.read().strip()
+        except:
+            return None
 
-    def load_cache(self) -> Optional[dict]:
-        """Carga cache local (si existe y es válido)"""
-        if not self.cache_file.exists():
+    def load_token(self) -> Optional[dict]:
+        """
+        Carga y decodifica el token JWT local (sin verificar firma).
+        Retorna el payload como dict o None si no existe/es inválido.
+        """
+        raw = self.load_token_raw()
+        if not raw:
             return None
 
         try:
-            with open(self.cache_file, 'r') as f:
-                cache = json.load(f)
-
-            # Verificar que no tenga más de 30 días
-            last_validation = datetime.fromisoformat(cache['last_validation'])
-            days_since = (datetime.now() - last_validation).days
-
-            if days_since > 30:
-                print("[PAMPA] Cache expirado (>30 días). Requiere validación online.")
-                return None
-
-            return cache
-
+            payload = jwt.decode(raw, options={"verify_signature": False})
+            return payload
         except Exception as e:
-            print(f"[PAMPA] Error leyendo cache: {e}")
+            print(f"[PAMPA] Error decodificando token: {e}")
             return None
 
-    def clear_cache(self):
-        """Elimina cache local"""
-        if self.cache_file.exists():
-            self.cache_file.unlink()
+    def clear_token(self):
+        """Elimina el token local"""
+        if self.token_file.exists():
+            self.token_file.unlink()
+
+    def _has_old_cache(self) -> bool:
+        """Verifica si existe cache viejo (pre-JWT) para forzar migración"""
+        return self.old_cache_file.exists()
 
     # ==============================================
-    # VALIDACIÓN
+    # PROTECCIÓN ANTI-MANIPULACIÓN DE RELOJ
     # ==============================================
 
-    def validate_license(self, license_key: str, force_online: bool = False) -> dict:
+    def save_last_seen_time(self):
+        """Guarda el timestamp actual como última hora conocida (nunca retrocede)"""
+        try:
+            now = datetime.now()
+            current = self.load_last_seen_time()
+            time_to_save = max(now, current) if current else now
+            with open(self.timestamp_file, 'w') as f:
+                f.write(time_to_save.isoformat())
+        except:
+            pass
+
+    def load_last_seen_time(self) -> Optional[datetime]:
+        """Carga la última hora conocida del sistema"""
+        if not self.timestamp_file.exists():
+            return None
+        try:
+            with open(self.timestamp_file, 'r') as f:
+                return datetime.fromisoformat(f.read().strip())
+        except:
+            return None
+
+    def get_effective_now(self) -> tuple:
         """
-        Valida una licencia con PAMPA
+        Retorna la hora efectiva actual, protegida contra manipulación de reloj.
+        Si el reloj retrocedió, usa la última hora conocida para evitar bypass del límite offline.
 
-        Args:
-            license_key: La clave de licencia
-            force_online: Fuerza validación online (ignora cache)
-
-        Returns:
-            dict con:
-                - valid (bool)
-                - status (str)
-                - message (str)
-                - expires_at (str, optional)
-                - days_remaining (int, optional)
-                - used_cache (bool)
+        Returns: (effective_time: datetime, clock_warning: str|None)
         """
+        now = datetime.now()
+        last_seen = self.load_last_seen_time()
+        clock_warning = None
 
-        # Intentar usar cache primero (si no forzamos online)
+        if last_seen and now < (last_seen - timedelta(minutes=5)):
+            diff_minutes = int((last_seen - now).total_seconds() / 60)
+            clock_warning = (
+                f"Se detectó que el reloj del sistema retrocedió {diff_minutes} minutos "
+                f"respecto al último uso registrado."
+            )
+            print(f"[PAMPA] ⚠️ Clock tampering detectado: reloj retrocedió {diff_minutes} min")
+            return last_seen, clock_warning
+
+        return now, clock_warning
+
+    def check_time_integrity(self) -> dict:
+        """
+        Verificación completa de integridad del reloj.
+        Compara con hora local guardada y con servidor si hay conexión.
+
+        Returns: {ok: bool, warning: str|None, type: str|None}
+        """
+        result = {"ok": True, "warning": None, "type": None}
+
+        effective_now, clock_warning = self.get_effective_now()
+        if clock_warning:
+            result["ok"] = False
+            result["warning"] = clock_warning
+            result["type"] = "clock_backwards"
+
+        # Comparar con hora del servidor si hay conexión
+        try:
+            from email.utils import parsedate_to_datetime
+            response = requests.head(f"{self.api_url}/", timeout=5)
+            server_date = response.headers.get('Date')
+            if server_date:
+                server_time = parsedate_to_datetime(server_date)
+                server_naive = server_time.replace(tzinfo=None)
+                diff_seconds = abs((datetime.now() - server_naive).total_seconds())
+                if diff_seconds > 300:  # 5 minutos
+                    result["ok"] = False
+                    result["warning"] = (
+                        f"El reloj del sistema difiere del servidor por "
+                        f"{int(diff_seconds/60)} minutos."
+                    )
+                    result["type"] = "clock_drift"
+        except:
+            pass
+
+        # Guardar hora actual (monotónica)
+        self.save_last_seen_time()
+
+        return result
+
+    # ==============================================
+    # VALIDACIÓN CON JWT
+    # ==============================================
+
+    def validate_license(self, license_key: str, force_online: bool = False, app_version: str = None) -> dict:
+        """
+        Valida una licencia usando JWT.
+
+        - Si hay token local válido (< 48h): permite uso offline
+        - Si no hay token o expiró: valida online y recibe nuevo JWT
+        - Si hardware_id no coincide: bloquea (token copiado)
+        """
+        # Forzar online si hay cache viejo (migración)
+        if self._has_old_cache():
+            print("[PAMPA] Detectado cache viejo, forzando validación online para migrar a JWT")
+            force_online = True
+
+        # Intentar usar token local
         if not force_online:
-            cache = self.load_cache()
-            if cache and cache.get('license_key') == license_key:
-                if cache.get('valid'):
-                    print(f"[PAMPA] Usando cache local (última validación: {cache['last_validation']})")
-                    cache['used_cache'] = True
-                    return cache
-                else:
-                    print(f"[PAMPA] Cache indica licencia inválida: {cache.get('status')}")
-                    cache['used_cache'] = True
-                    return cache
+            token_data = self.load_token()
+            if token_data and token_data.get('license_key') == license_key:
+                last_validation_str = token_data.get('last_validation')
+                if last_validation_str:
+                    try:
+                        last_validation = datetime.fromisoformat(last_validation_str)
+
+                        # Usar hora efectiva (protegida contra manipulación de reloj)
+                        effective_now, clock_warning = self.get_effective_now()
+                        hours_since = (effective_now - last_validation).total_seconds() / 3600
+
+                        # Si hours_since es negativo pese a la protección, forzar a 0
+                        if hours_since < 0:
+                            hours_since = 0
+
+                        # Verificar hardware_id
+                        current_hw_hash = self.get_hardware_hash()
+                        if token_data.get('hardware_id') != current_hw_hash:
+                            print("[PAMPA] Hardware ID del token no coincide con este equipo")
+                            return {
+                                "valid": False,
+                                "status": "hardware_mismatch",
+                                "message": "Este token fue emitido para otro equipo.",
+                                "used_cache": True
+                            }
+
+                        # Verificar expiración de licencia
+                        expires_at_str = token_data.get('expires_at')
+                        if expires_at_str:
+                            expires_at = datetime.fromisoformat(expires_at_str)
+                            if expires_at < effective_now:
+                                return {
+                                    "valid": False,
+                                    "status": "expired",
+                                    "message": "La licencia ha vencido.",
+                                    "used_cache": True
+                                }
+
+                        # Verificar límite offline
+                        offline_limit = token_data.get('offline_limit_hours', OFFLINE_LIMIT_HOURS)
+                        if hours_since <= offline_limit:
+                            print(f"[PAMPA] Token válido (offline {hours_since:.1f}h / {offline_limit}h)")
+                            days_remaining = None
+                            if expires_at_str:
+                                days_remaining = max(0, (datetime.fromisoformat(expires_at_str) - effective_now).days)
+
+                            # Guardar timestamp (monotónico)
+                            self.save_last_seen_time()
+
+                            return {
+                                "valid": True,
+                                "status": "active",
+                                "message": "Licencia válida (modo offline)",
+                                "expires_at": expires_at_str,
+                                "days_remaining": days_remaining,
+                                "used_cache": True,
+                                "hours_offline": round(hours_since, 1),
+                                "hours_remaining": round(offline_limit - hours_since, 1),
+                                "clock_warning": clock_warning
+                            }
+                        else:
+                            print(f"[PAMPA] Límite offline superado ({hours_since:.1f}h > {offline_limit}h)")
+                            return {
+                                "valid": False,
+                                "status": "offline_limit",
+                                "message": f"Se superó el límite de {offline_limit} horas sin conexión. Conéctate a internet para continuar.",
+                                "used_cache": True,
+                                "clock_warning": clock_warning
+                            }
+                    except Exception as e:
+                        print(f"[PAMPA] Error procesando token: {e}")
 
         # Validación online
         print("[PAMPA] Validando licencia online...")
+
+        # Verificar integridad del reloj antes de validar
+        _, clock_warning_online = self.get_effective_now()
 
         try:
             hardware = self.get_hardware_fingerprint()
@@ -203,17 +358,24 @@ class PampaClient:
                 json={
                     "program_code": self.program_code,
                     "license_key": license_key,
-                    "hardware": hardware
+                    "hardware": hardware,
+                    "machine_name": self.get_machine_name(),
+                    "app_version": app_version,
+                    "clock_tampered": clock_warning_online is not None
                 },
-                timeout=10
+                timeout=15
             )
 
             if response.status_code == 200:
                 result = response.json()
                 result['used_cache'] = False
 
-                # Guardar en cache
-                self.save_cache(license_key, result)
+                # Guardar token JWT si viene en la respuesta
+                token = result.get('token')
+                if token:
+                    self.save_token(token)
+                    self.save_last_seen_time()
+                    print("[PAMPA] Token JWT guardado")
 
                 return result
             else:
@@ -248,44 +410,130 @@ class PampaClient:
                 "used_cache": False
             }
 
+    # ==============================================
+    # VALIDACIÓN SILENCIOSA (cada 6h)
+    # ==============================================
+
+    def silent_refresh(self, license_key: str) -> dict:
+        """
+        Refresca el token JWT silenciosamente.
+        Se usa cada 6 horas para verificar que la licencia sigue activa
+        y que no fue activada en otra PC.
+        """
+        raw_token = self.load_token_raw()
+        if not raw_token:
+            return {"valid": False, "status": "no_token", "message": "No hay token local"}
+
+        hw_hash = self.get_hardware_hash()
+
+        try:
+            response = requests.post(
+                f"{self.api_url}/api/v1/token/refresh",
+                json={
+                    "token": raw_token,
+                    "hardware_id": hw_hash
+                },
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+
+                if result.get('valid') and result.get('token'):
+                    self.save_token(result['token'])
+                    self.save_last_seen_time()
+                    print("[PAMPA] Token renovado silenciosamente")
+
+                return result
+            else:
+                return {"valid": False, "status": "server_error",
+                        "message": f"Error del servidor: {response.status_code}"}
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            print("[PAMPA] Sin conexión para refresh silencioso (se usará token local)")
+            return {"valid": True, "status": "offline",
+                    "message": "Sin conexión, usando token local"}
+
+        except Exception as e:
+            print(f"[PAMPA] Error en refresh silencioso: {e}")
+            return {"valid": True, "status": "refresh_error",
+                    "message": f"Error: {str(e)}"}
+
+    # ==============================================
+    # AUTOLIBERACIÓN
+    # ==============================================
+
+    def release_license(self, license_key: str, app_version: str = None) -> dict:
+        """
+        Libera la licencia de este equipo para poder usarla en otro.
+        Requiere conexión a internet.
+        """
+        try:
+            hardware = self.get_hardware_fingerprint()
+
+            response = requests.post(
+                f"{self.api_url}/api/v1/license/release",
+                json={
+                    "license_key": license_key,
+                    "hardware": hardware,
+                    "machine_name": self.get_machine_name(),
+                    "app_version": app_version
+                },
+                timeout=15
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+
+                if result.get('success'):
+                    self.clear_token()
+                    print("[PAMPA] Licencia liberada, token local eliminado")
+
+                return result
+            else:
+                return {"success": False, "message": f"Error del servidor: {response.status_code}"}
+
+        except requests.exceptions.ConnectionError:
+            return {"success": False, "message": "Se necesita conexión a internet para liberar la licencia."}
+        except requests.exceptions.Timeout:
+            return {"success": False, "message": "Timeout al conectar. Intenta nuevamente."}
+        except Exception as e:
+            return {"success": False, "message": f"Error: {str(e)}"}
+
+    # ==============================================
+    # CONSULTAS
+    # ==============================================
+
     def get_license_status(self, license_key: str) -> Optional[dict]:
-        """
-        Obtiene el estado de una licencia (sin validar hardware)
-
-        Útil para mostrar info al usuario
-
-        Returns:
-            dict con información de la licencia o None si hay error
-        """
+        """Obtiene el estado de una licencia (sin validar hardware)"""
         try:
             response = requests.get(
                 f"{self.api_url}/api/v1/license/{license_key}/status",
                 timeout=10
             )
-
             if response.status_code == 200:
                 return response.json()
             else:
                 return None
-
         except Exception as e:
             print(f"[PAMPA] Error obteniendo estado: {e}")
             return None
 
     def check_expiration_alerts(self, license_key: str) -> Optional[str]:
-        """
-        Verifica si la licencia está por vencer y retorna el mensaje de alerta
-
-        Returns:
-            - None si no hay alerta
-            - String con el mensaje de alerta si aplica
-        """
-        cache = self.load_cache()
-        if not cache or cache.get('license_key') != license_key:
+        """Verifica si la licencia está por vencer"""
+        token_data = self.load_token()
+        if not token_data or token_data.get('license_key') != license_key:
             return None
 
-        days_remaining = cache.get('days_remaining')
-        if days_remaining is None:
+        expires_at_str = token_data.get('expires_at')
+        if not expires_at_str:
+            return None
+
+        try:
+            expires_at = datetime.fromisoformat(expires_at_str)
+            effective_now, _ = self.get_effective_now()
+            days_remaining = max(0, (expires_at - effective_now).days)
+        except:
             return None
 
         if days_remaining <= 1:
@@ -298,47 +546,42 @@ class PampaClient:
         return None
 
     def get_validation_info(self) -> Dict:
-        """
-        Obtiene información sobre el estado de validación mensual
+        """Obtiene información sobre el estado de validación"""
+        token_data = self.load_token()
 
-        Returns:
-            dict con:
-                - last_validation (datetime o None)
-                - days_since_validation (int)
-                - days_until_required (int) - días hasta que se requiera conexión
-                - requires_connection (bool) - True si necesita conectarse ahora
-        """
-        cache = self.load_cache()
-
-        if not cache:
+        if not token_data:
             return {
                 "last_validation": None,
-                "days_since_validation": None,
-                "days_until_required": 0,
+                "hours_since_validation": None,
+                "hours_until_required": 0,
                 "requires_connection": True
             }
 
         try:
-            last_validation = datetime.fromisoformat(cache['last_validation'])
-            days_since = (datetime.now() - last_validation).days
-            days_until = max(0, 30 - days_since)
+            last_validation = datetime.fromisoformat(token_data['last_validation'])
+            effective_now, _ = self.get_effective_now()
+            hours_since = (effective_now - last_validation).total_seconds() / 3600
+            if hours_since < 0:
+                hours_since = 0
+            offline_limit = token_data.get('offline_limit_hours', OFFLINE_LIMIT_HOURS)
+            hours_until = max(0, offline_limit - hours_since)
 
             return {
                 "last_validation": last_validation,
-                "days_since_validation": days_since,
-                "days_until_required": days_until,
-                "requires_connection": days_since >= 30
+                "hours_since_validation": round(hours_since, 1),
+                "hours_until_required": round(hours_until, 1),
+                "requires_connection": hours_since >= offline_limit
             }
         except:
             return {
                 "last_validation": None,
-                "days_since_validation": None,
-                "days_until_required": 0,
+                "hours_since_validation": None,
+                "hours_until_required": 0,
                 "requires_connection": True
             }
 
     def is_cache_expired(self) -> bool:
-        """Verifica si el cache local ha expirado (>30 días)"""
+        """Verifica si el token local ha expirado (>48h offline)"""
         info = self.get_validation_info()
         return info.get("requires_connection", True)
 
@@ -347,88 +590,43 @@ class PampaClient:
     # ==============================================
 
     def login(self, email: str, password: str) -> dict:
-        """
-        Autenticar usuario contra PAMPA
-
-        Args:
-            email: Email del usuario
-            password: Contraseña
-
-        Returns:
-            dict con:
-                - success (bool)
-                - usuario (dict) si success
-                - licencias (list) si success
-                - error (str) si no success
-        """
+        """Autenticar usuario contra PAMPA"""
         print("[PAMPA] Autenticando usuario online...")
 
         try:
             response = requests.post(
                 f"{self.api_url}/api/v1/auth/login",
-                json={
-                    "email": email,
-                    "password": password
-                },
+                json={"email": email, "password": password},
                 timeout=15
             )
 
             if response.status_code == 200:
                 result = response.json()
                 if result.get('success'):
-                    print(f"[PAMPA] ✅ Usuario autenticado: {result['usuario']['email']}")
+                    print(f"[PAMPA] Usuario autenticado: {result['usuario']['email']}")
                 else:
-                    print(f"[PAMPA] ❌ Error: {result.get('error')}")
+                    print(f"[PAMPA] Error: {result.get('error')}")
                 return result
             else:
-                return {
-                    "success": False,
-                    "error": f"Error del servidor: {response.status_code}"
-                }
+                return {"success": False, "error": f"Error del servidor: {response.status_code}"}
 
         except requests.exceptions.Timeout:
-            return {
-                "success": False,
-                "error": "Timeout al conectar. Verifica tu conexión a internet."
-            }
+            return {"success": False, "error": "Timeout al conectar. Verifica tu conexión a internet."}
         except requests.exceptions.ConnectionError:
-            return {
-                "success": False,
-                "error": "No se pudo conectar con el servidor. Verifica tu conexión."
-            }
+            return {"success": False, "error": "No se pudo conectar con el servidor. Verifica tu conexión."}
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Error inesperado: {str(e)}"
-            }
+            return {"success": False, "error": f"Error inesperado: {str(e)}"}
 
     def register(self, email: str, password: str, nombre: str, apellido: str = "", telefono: str = "") -> dict:
-        """
-        Registrar usuario en PAMPA
-
-        Args:
-            email: Email del usuario
-            password: Contraseña
-            nombre: Nombre
-            apellido: Apellido (opcional)
-            telefono: Teléfono (opcional)
-
-        Returns:
-            dict con:
-                - success (bool)
-                - usuario (dict) si success
-                - error (str) si no success
-        """
+        """Registrar usuario en PAMPA"""
         print("[PAMPA] Registrando usuario online...")
 
         try:
             response = requests.post(
                 f"{self.api_url}/api/v1/auth/register",
                 json={
-                    "email": email,
-                    "password": password,
-                    "nombre": nombre,
-                    "apellido": apellido,
+                    "email": email, "password": password,
+                    "nombre": nombre, "apellido": apellido,
                     "telefono": telefono
                 },
                 timeout=15
@@ -437,41 +635,26 @@ class PampaClient:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('success'):
-                    print(f"[PAMPA] ✅ Usuario registrado: {email}")
+                    print(f"[PAMPA] Usuario registrado: {email}")
                 else:
-                    print(f"[PAMPA] ❌ Error: {result.get('error')}")
+                    print(f"[PAMPA] Error: {result.get('error')}")
                 return result
             else:
-                return {
-                    "success": False,
-                    "error": f"Error del servidor: {response.status_code}"
-                }
+                return {"success": False, "error": f"Error del servidor: {response.status_code}"}
 
         except requests.exceptions.Timeout:
-            return {
-                "success": False,
-                "error": "Timeout al conectar. Verifica tu conexión a internet."
-            }
+            return {"success": False, "error": "Timeout al conectar. Verifica tu conexión a internet."}
         except requests.exceptions.ConnectionError:
-            return {
-                "success": False,
-                "error": "No se pudo conectar con el servidor. Verifica tu conexión."
-            }
+            return {"success": False, "error": "No se pudo conectar con el servidor. Verifica tu conexión."}
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Error inesperado: {str(e)}"
-            }
+            return {"success": False, "error": f"Error inesperado: {str(e)}"}
 
     # ==============================================
     # VERIFICACIÓN DE ACTUALIZACIONES
     # ==============================================
 
     def check_for_updates(self, current_version: str) -> Optional[Dict]:
-        """
-        Consulta al servidor si hay una versión más nueva.
-        Retorna dict con info de la actualización o None si está al día.
-        """
+        """Consulta al servidor si hay una versión más nueva."""
         try:
             response = requests.get(
                 f"{self.api_url}/api/v1/version/{self.program_code}",
@@ -498,38 +681,3 @@ class PampaClient:
             return latest_parts > current_parts
         except:
             return False
-
-# ==============================================
-# EJEMPLO DE USO
-# ==============================================
-
-if __name__ == "__main__":
-    # Test del cliente
-    print("=== PAMPA Client - Test ===\n")
-
-    # Inicializar cliente para WelcomeX
-    client = PampaClient("WELCOME_X", "http://localhost:8000")
-
-    # Obtener huella de hardware
-    print("1. Obteniendo huella de hardware...")
-    hw = client.get_hardware_fingerprint()
-    for key, value in hw.items():
-        print(f"   {key}: {value}")
-
-    print("\n2. Validando licencia de prueba...")
-    # Reemplazar con una licencia real
-    result = client.validate_license("TEST-LICENSE-KEY")
-
-    print(f"\n   Valid: {result['valid']}")
-    print(f"   Status: {result['status']}")
-    print(f"   Message: {result['message']}")
-
-    if result.get('days_remaining'):
-        print(f"   Days remaining: {result['days_remaining']}")
-
-    print("\n3. Verificando alertas...")
-    alert = client.check_expiration_alerts("TEST-LICENSE-KEY")
-    if alert:
-        print(f"   {alert}")
-    else:
-        print("   Sin alertas")

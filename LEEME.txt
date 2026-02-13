@@ -1,5 +1,5 @@
 =====================================
-  WelcomeX v4.8 - Guia Rapida
+  WelcomeX v1.1.0 - Guia Rapida
 =====================================
 
 INSTALACION:
@@ -37,10 +37,11 @@ PROBLEMAS COMUNES:
 CONTACTO:
 ---------
 
-[Tu WhatsApp]
-[Tu Email]
+WhatsApp: +54 9 11 7082-1540
+Email: info@pampaguazu.com.ar
+Web: https://pampaguazu.com.ar
 
 
-Version: 4.8
-Fecha: Enero 2025
+Version: 1.1.0
+Fecha: Febrero 2026
 =====================================
