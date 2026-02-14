@@ -236,8 +236,11 @@ class PampaClient:
             server_date = response.headers.get('Date')
             if server_date:
                 server_time = parsedate_to_datetime(server_date)
-                server_naive = server_time.replace(tzinfo=None)
-                diff_seconds = abs((datetime.now() - server_naive).total_seconds())
+                # Comparar ambos en UTC para evitar desfasaje por timezone
+                from datetime import timezone as tz
+                now_utc = datetime.now(tz.utc)
+                server_utc = server_time if server_time.tzinfo else server_time.replace(tzinfo=tz.utc)
+                diff_seconds = abs((now_utc - server_utc).total_seconds())
                 if diff_seconds > 300:  # 5 minutos
                     result["ok"] = False
                     result["warning"] = (
