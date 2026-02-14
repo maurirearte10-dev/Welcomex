@@ -5190,7 +5190,7 @@ class WelcomeXApp(ctk.CTk):
                      font=("Arial", 14)).pack()
 
     def _iniciar_validacion_silenciosa(self):
-        """Inicia el timer de validación silenciosa cada 6 horas"""
+        """Inicia el timer de validación silenciosa cada 10 minutos"""
         if self.es_modo_demo():
             return  # No validar en modo demo
 
@@ -5216,11 +5216,11 @@ class WelcomeXApp(ctk.CTk):
             except Exception as e:
                 print(f"[WelcomeX] Error en validación silenciosa: {e}")
 
-            # Reprogramar para 6 horas después (21600000 ms)
-            self.after(21600000, validar_silencioso)
+            # Reprogramar para 10 minutos después (600000 ms)
+            self.after(600000, validar_silencioso)
 
-        # Primera validación silenciosa en 5 minutos (300000 ms)
-        self.after(300000, validar_silencioso)
+        # Primera validación silenciosa en 1 minuto (60000 ms)
+        self.after(60000, validar_silencioso)
 
     def _toggle_self_release(self, switch):
         """Activa/desactiva la opción de autoliberación"""
