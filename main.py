@@ -44,18 +44,20 @@ class WelcomeXApp(ctk.CTk):
         super().__init__()
         
         self.title("WelcomeX - Sistema de Gestión de Eventos")
-        
-        # Tamaño de ventana
-        width = 1400
-        height = 900
-        
-        # Centrar en pantalla
+
+        # Adaptar tamaño a la resolución de pantalla
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
+
+        # Usar 85% de la pantalla, con mínimo 1000x650 y máximo 1400x900
+        width = max(1000, min(1400, int(screen_width * 0.85)))
+        height = max(650, min(900, int(screen_height * 0.85)))
+
         x = (screen_width - width) // 2
         y = (screen_height - height) // 2
-        
+
         self.geometry(f"{width}x{height}+{x}+{y}")
+        self.minsize(1000, 650)
 
         # Icono de la ventana
         try:
