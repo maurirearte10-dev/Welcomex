@@ -1025,13 +1025,13 @@ class WelcomeXApp(ctk.CTk):
                 dias = result.get('days_remaining') or 0
                 expira = result.get('expires_at', 'N/A')
 
-                # Formatear fecha de vencimiento (dd/mm/yyyy)
+                # Formatear fecha de vencimiento (dd/mm/yyyy HH:MM)
                 expira_display = 'N/A'
                 if expira and expira != 'N/A':
                     try:
-                        expira_display = datetime.fromisoformat(expira).strftime('%d/%m/%Y')
+                        expira_display = datetime.fromisoformat(expira).strftime('%d/%m/%Y %H:%M') + ' hs'
                     except:
-                        expira_display = expira[:10]
+                        expira_display = expira[:16]
 
                 # Color según días restantes
                 if dias is not None and dias > 30:
@@ -5062,8 +5062,13 @@ class WelcomeXApp(ctk.CTk):
                 self.guardar_license_key(license_key)
 
                 dias = result.get('days_remaining') or 0
+                expira_str = result.get('expires_at', '')
+                try:
+                    expira_fmt = datetime.fromisoformat(expira_str).strftime('%d/%m/%Y %H:%M') + ' hs'
+                except:
+                    expira_fmt = f"{dias} días"
                 msg_label.configure(
-                    text=f"✅ Licencia activada! Vence en {dias} días.",
+                    text=f"✅ Licencia activada! Vence el {expira_fmt}",
                     text_color=COLORS["success"]
                 )
 
