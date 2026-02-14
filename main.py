@@ -24,7 +24,18 @@ from modules.pampa_client import PampaClient
 from modules.i18n import t, set_language, get_language, SUPPORTED_LANGUAGES, LANGUAGE_NAMES
 from modules.sorteo import SorteoAnimacion, SorteoPorMesaAnimacion
 
-ctk.set_appearance_mode("dark")
+# Cargar preferencia de tema antes de crear la ventana
+def _load_theme():
+    try:
+        db.connect()
+        db.cursor.execute("SELECT valor FROM configuracion WHERE clave = 'dark_mode'")
+        row = db.cursor.fetchone()
+        db.disconnect()
+        return "dark" if (not row or row['valor'] == '1') else "light"
+    except:
+        return "dark"
+
+ctk.set_appearance_mode(_load_theme())
 ctk.set_default_color_theme("blue")
 
 
@@ -1025,6 +1036,15 @@ class WelcomeXApp(ctk.CTk):
                 dias = result.get('days_remaining') or 0
                 expira = result.get('expires_at', 'N/A')
 
+                # Calcular horas restantes si es menos de 1 día
+                horas_restantes = None
+                if expira and expira != 'N/A':
+                    try:
+                        diff = datetime.fromisoformat(expira) - datetime.now()
+                        horas_restantes = max(0, int(diff.total_seconds() / 3600))
+                    except:
+                        pass
+
                 # Formatear fecha de vencimiento (dd/mm/yyyy HH:MM)
                 expira_display = 'N/A'
                 if expira and expira != 'N/A':
@@ -1044,6 +1064,12 @@ class WelcomeXApp(ctk.CTk):
                     color_estado = COLORS["danger"]
                     icono = "⚠️"
 
+                # Texto de tiempo restante
+                if dias == 0 and horas_restantes is not None and horas_restantes > 0:
+                    tiempo_restante = f"Vence en {horas_restantes} hora{'s' if horas_restantes != 1 else ''}"
+                else:
+                    tiempo_restante = t("config.days_remaining", days=dias)
+
                 info_frame = ctk.CTkFrame(lic_inner, fg_color=COLORS["bg"], corner_radius=8)
                 info_frame.pack(fill="x", pady=10)
                 info_content = ctk.CTkFrame(info_frame, fg_color="transparent")
@@ -1051,7 +1077,7 @@ class WelcomeXApp(ctk.CTk):
 
                 ctk.CTkLabel(info_content, text=f"{icono} {t('config.license_active')}",
                             font=("Arial", 16, "bold"), text_color=color_estado).pack(anchor="w")
-                ctk.CTkLabel(info_content, text=t("config.days_remaining", days=dias),
+                ctk.CTkLabel(info_content, text=tiempo_restante,
                             font=("Arial", 14), text_color=COLORS["text_light"]).pack(anchor="w", pady=(5, 0))
                 ctk.CTkLabel(info_content, text=t("config.expires", date=expira_display),
                             font=("Arial", 14), text_color=COLORS["text_light"]).pack(anchor="w")
@@ -1175,9 +1201,8 @@ class WelcomeXApp(ctk.CTk):
             db.connection.commit()
             db.disconnect()
 
-            self.mostrar_mensaje("Reinicio Necesario",
-                                "El cambio de tema se aplicará al reiniciar la aplicación.",
-                                "info")
+            # Aplicar inmediatamente
+            ctk.set_appearance_mode("dark" if nuevo_modo else "light")
 
         switch = ctk.CTkSwitch(modo_frame, text="", variable=modo_var,
                                command=toggle_dark_mode, font=("Arial", 14))
@@ -2316,16 +2341,31 @@ class WelcomeXApp(ctk.CTk):
                 return
 
             dias = result.get('days_remaining')
+            horas = None
+            expires_at_str = result.get('expires_at')
             if dias is None:
                 # Calcular desde expires_at si el servidor no lo envió
-                expires_at_str = result.get('expires_at')
                 if expires_at_str:
                     try:
-                        dias = max(0, (datetime.fromisoformat(expires_at_str) - datetime.now()).days)
+                        diff = datetime.fromisoformat(expires_at_str) - datetime.now()
+                        dias = max(0, diff.days)
+                        horas = max(0, int(diff.total_seconds() / 3600))
                     except:
                         dias = 0
+                        horas = 0
                 else:
                     dias = 0
+                    horas = 0
+            else:
+                # Calcular horas desde expires_at
+                if expires_at_str:
+                    try:
+                        diff = datetime.fromisoformat(expires_at_str) - datetime.now()
+                        horas = max(0, int(diff.total_seconds() / 3600))
+                    except:
+                        horas = dias * 24
+                else:
+                    horas = dias * 24
             status = result.get('status', 'unknown')
 
             # Determinar estado visual
@@ -2345,6 +2385,14 @@ class WelcomeXApp(ctk.CTk):
                     texto_sub = result.get('message', t("license_status.contact_support"))[:25]
                     color_texto = COLORS["danger"]
                     color_sub = "#fca5a5"
+            elif dias == 0 and horas is not None and horas > 0:
+                # Menos de 1 día - mostrar horas
+                bg_color = "#4a1d1d"
+                icono = "🔴"
+                texto_estado = f"VENCE EN {horas} HORA{'S' if horas != 1 else ''}"
+                texto_sub = t("license_status.renew_urgent")
+                color_texto = COLORS["danger"]
+                color_sub = "#fca5a5"
             elif dias <= 3:
                 # Crítico - vence en 3 días o menos
                 bg_color = "#4a1d1d"
