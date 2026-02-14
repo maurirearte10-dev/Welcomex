@@ -150,69 +150,97 @@ class WelcomeXApp(ctk.CTk):
     # ============================================
 
     def _check_for_updates(self):
-        """Chequea si hay una versión nueva disponible (no bloqueante)"""
+        """Chequea si hay una versión nueva y auto-actualiza"""
         import threading
         def _check():
             update = self.pampa.check_for_updates(APP_VERSION)
             if update:
                 self.update_info = update
-                self.after(0, self._mostrar_banner_update)
+                self.after(0, self._auto_update)
         threading.Thread(target=_check, daemon=True).start()
 
-    def _mostrar_banner_update(self):
-        """Muestra un banner dorado arriba de la ventana avisando que hay actualización"""
+    def _auto_update(self):
+        """Descarga e instala la actualización automáticamente"""
         if not self.update_info:
             return
 
-        lang = get_language()
         version = self.update_info["latest_version"]
-        changelog = self.update_info.get("changelog", {})
         download_url = self.update_info.get("download_url", "")
+        if not download_url:
+            return
 
-        # Extraer primer cambio como resumen
-        cambios_lista = changelog.get(lang, changelog.get("es", []))
-        resumen = cambios_lista[0] if isinstance(cambios_lista, list) and cambios_lista else str(cambios_lista)
+        # Ventana de progreso
+        self._update_win = ctk.CTkToplevel(self)
+        self._update_win.title("Actualización")
+        self._update_win.geometry("480x220")
+        self._update_win.resizable(False, False)
+        self._update_win.transient(self)
+        self._update_win.grab_set()
+        x = (self._update_win.winfo_screenwidth() - 480) // 2
+        y = (self._update_win.winfo_screenheight() - 220) // 2
+        self._update_win.geometry(f"+{x}+{y}")
+        self._update_win.protocol("WM_DELETE_WINDOW", lambda: None)
 
-        # Crear banner flotante arriba
-        self.update_banner = ctk.CTkFrame(self, fg_color="#b8860b", corner_radius=0, height=40)
-        self.update_banner.place(relx=0, rely=0, relwidth=1)
-        self.update_banner.lift()
+        frame = ctk.CTkFrame(self._update_win, fg_color=COLORS["card"])
+        frame.pack(expand=True, fill="both", padx=20, pady=20)
 
-        inner = ctk.CTkFrame(self.update_banner, fg_color="transparent")
-        inner.pack(expand=True, fill="x", padx=20)
+        ctk.CTkLabel(frame, text=f"Actualizando a v{version}",
+                    font=("Segoe UI", 20, "bold"),
+                    text_color=COLORS["gold"]).pack(pady=(15, 5))
 
-        texto = f"v{version} — {t('update.available')}  |  {resumen}"
+        self._update_status = ctk.CTkLabel(frame, text="Descargando actualización...",
+                    font=("Segoe UI", 13), text_color=COLORS["text_light"])
+        self._update_status.pack(pady=(5, 10))
 
-        label = ctk.CTkLabel(inner, text=texto, text_color="white", font=("Segoe UI", 13, "bold"))
-        label.pack(side="left", padx=(0, 15))
+        self._update_progress = ctk.CTkProgressBar(frame, width=380, height=12,
+                    progress_color=COLORS["gold"])
+        self._update_progress.pack(pady=(0, 10))
+        self._update_progress.set(0)
 
-        btn_ver = ctk.CTkButton(
-            inner,
-            text=t("update.see_changes"),
-            width=100, height=28,
-            fg_color="#1a1a2e", hover_color="#2b2b3c",
-            font=("Segoe UI", 12, "bold"),
-            command=self.mostrar_ventana_updates
-        )
-        btn_ver.pack(side="left", padx=5)
+        self._update_percent = ctk.CTkLabel(frame, text="0%",
+                    font=("Segoe UI", 12), text_color=COLORS["text_light"])
+        self._update_percent.pack()
 
-        btn_download = ctk.CTkButton(
-            inner,
-            text=t("update.download_btn"),
-            width=130, height=28,
-            fg_color="#10b981", hover_color="#059669",
-            font=("Segoe UI", 12, "bold"),
-            command=lambda: webbrowser.open(download_url)
-        )
-        btn_download.pack(side="left", padx=5)
+        # Descargar en background
+        import threading, tempfile, os
+        dest = os.path.join(tempfile.gettempdir(), "WelcomeX_Setup.exe")
 
-        btn_close = ctk.CTkButton(
-            inner,
-            text="✕", width=28, height=28,
-            fg_color="transparent", hover_color="#8B6914",
-            command=lambda: self.update_banner.destroy()
-        )
-        btn_close.pack(side="right")
+        def _progress(pct):
+            self.after(0, lambda p=pct: self._update_set_progress(p))
+
+        def _download():
+            ok = self.pampa.download_update(download_url, dest, progress_callback=_progress)
+            self.after(0, lambda: self._update_finished(ok, dest))
+
+        threading.Thread(target=_download, daemon=True).start()
+
+    def _update_set_progress(self, pct):
+        """Actualiza la barra de progreso"""
+        self._update_progress.set(pct)
+        self._update_percent.configure(text=f"{int(pct * 100)}%")
+
+    def _update_finished(self, ok, installer_path):
+        """Finaliza la descarga: ejecuta el instalador y cierra la app"""
+        import subprocess, sys
+        if ok:
+            self._update_status.configure(text="Instalando actualización...")
+            self._update_progress.set(1)
+            self._update_percent.configure(text="100%")
+            self.after(500, lambda: self._launch_installer(installer_path))
+        else:
+            self._update_status.configure(text="Error al descargar. Reintentando al próximo inicio.")
+            self._update_progress.configure(progress_color="#ef4444")
+            self.after(3000, lambda: self._update_win.destroy())
+
+    def _launch_installer(self, installer_path):
+        """Ejecuta el instalador en modo silencioso y cierra WelcomeX"""
+        import subprocess, sys
+        try:
+            subprocess.Popen([installer_path, "/SILENT", "/CLOSEAPPLICATIONS"],
+                           creationflags=subprocess.DETACHED_PROCESS)
+        except Exception:
+            subprocess.Popen([installer_path])
+        sys.exit(0)
 
     def mostrar_ventana_updates(self):
         """Ventana visual con historial completo de actualizaciones"""

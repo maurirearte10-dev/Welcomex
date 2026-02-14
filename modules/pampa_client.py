@@ -673,6 +673,24 @@ class PampaClient:
         except:
             return None
 
+    def download_update(self, download_url: str, dest_path: str, progress_callback=None) -> bool:
+        """Descarga el instalador de actualización con progreso."""
+        try:
+            response = requests.get(download_url, stream=True, timeout=30)
+            response.raise_for_status()
+            total = int(response.headers.get("content-length", 0))
+            downloaded = 0
+            with open(dest_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if progress_callback and total > 0:
+                        progress_callback(downloaded / total)
+            return True
+        except Exception as e:
+            print(f"[WelcomeX] Error descargando update: {e}")
+            return False
+
     def _version_is_newer(self, latest: str, current: str) -> bool:
         """Compara versiones semánticas (1.2.3 > 1.2.0)"""
         try:
