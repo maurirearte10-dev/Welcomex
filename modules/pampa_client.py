@@ -293,13 +293,10 @@ class PampaClient:
                         # Verificar hardware_id
                         current_hw_hash = self.get_hardware_hash()
                         if token_data.get('hardware_id') != current_hw_hash:
-                            print("[PAMPA] Hardware ID del token no coincide con este equipo")
-                            return {
-                                "valid": False,
-                                "status": "hardware_mismatch",
-                                "message": "Este token fue emitido para otro equipo.",
-                                "used_cache": True
-                            }
+                            # Token de otra PC o reinstalación — borrar y revalidar online
+                            print("[PAMPA] Hardware ID del token no coincide — borrando token y revalidando online")
+                            self.clear_token()
+                            return self.validate_license(license_key, force_online=True, app_version=app_version)
 
                         # Verificar expiración de licencia
                         expires_at_str = token_data.get('expires_at')

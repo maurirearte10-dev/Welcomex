@@ -49,15 +49,15 @@ class WelcomeXApp(ctk.CTk):
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
 
-        # Usar 85% de la pantalla, con mínimo 1000x650 y máximo 1400x900
-        width = max(1000, min(1400, int(screen_width * 0.85)))
-        height = max(650, min(900, int(screen_height * 0.85)))
+        # Usar 90% de la pantalla sin mínimos fijos — se adapta a cualquier resolución
+        width = min(1400, int(screen_width * 0.90))
+        height = min(900, int(screen_height * 0.90))
 
         x = (screen_width - width) // 2
         y = (screen_height - height) // 2
 
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(1000, 650)
+        self.minsize(width, height)  # Mínimo = lo que calculamos, nunca mayor a la pantalla
 
         # Icono de la ventana
         try:
@@ -186,33 +186,52 @@ class WelcomeXApp(ctk.CTk):
         self.after(1000, lambda: self._start_download(version, download_url))
 
     def _start_download(self, version, download_url):
-        """Muestra ventana de progreso y descarga la actualización"""
-        # Ventana de progreso (sin botón cerrar)
+        """Muestra ventana con pasos del proceso de actualización y descarga"""
         self._update_win = ctk.CTkToplevel(self)
-        self._update_win.title("Descargando actualización")
-        self._update_win.geometry("480x200")
+        self._update_win.title(f"Actualizando a v{version}")
+        self._update_win.geometry("480x360")
         self._update_win.resizable(False, False)
         self._update_win.transient(self)
-        self._update_win.grab_set()
+        # NO grab_set() — no bloquear la app mientras descarga
         x = (self._update_win.winfo_screenwidth() - 480) // 2
-        y = (self._update_win.winfo_screenheight() - 200) // 2
+        y = (self._update_win.winfo_screenheight() - 360) // 2
         self._update_win.geometry(f"+{x}+{y}")
         self._update_win.protocol("WM_DELETE_WINDOW", lambda: None)
 
         frame = ctk.CTkFrame(self._update_win, fg_color=COLORS["card"])
-        frame.pack(expand=True, fill="both", padx=20, pady=20)
+        frame.pack(expand=True, fill="both", padx=24, pady=24)
 
-        ctk.CTkLabel(frame, text=f"Descargando v{version}...",
-                    font=("Segoe UI", 18, "bold"),
-                    text_color=COLORS["gold"]).pack(pady=(15, 5))
+        ctk.CTkLabel(frame, text=f"Actualizando a v{version}",
+                    font=("Segoe UI", 17, "bold"),
+                    text_color=COLORS["gold"]).pack(pady=(10, 18))
 
-        self._update_status = ctk.CTkLabel(frame, text="Por favor, no cierres el programa",
-                    font=("Segoe UI", 12), text_color=COLORS["text_light"])
-        self._update_status.pack(pady=(5, 10))
+        # Pasos con iconos de estado
+        steps_data = [
+            ("✅", "Nueva versión detectada",    COLORS["text"]),
+            ("🔄", "Descargando actualización...", COLORS["gold"]),
+            ("⏳", "Instalando en segundo plano", COLORS["text_light"]),
+            ("⏳", "Reiniciando WelcomeX",         COLORS["text_light"]),
+        ]
+        self._step_icons = []
+        self._step_labels = []
+        steps_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        steps_frame.pack(fill="x", padx=10, pady=(0, 14))
 
-        self._update_progress = ctk.CTkProgressBar(frame, width=400, height=14,
+        for icon, text, color in steps_data:
+            row = ctk.CTkFrame(steps_frame, fg_color="transparent")
+            row.pack(fill="x", pady=5)
+            icon_lbl = ctk.CTkLabel(row, text=icon, font=("Segoe UI", 15), width=28)
+            icon_lbl.pack(side="left")
+            text_lbl = ctk.CTkLabel(row, text=text, font=("Segoe UI", 13),
+                                   text_color=color, anchor="w")
+            text_lbl.pack(side="left", padx=(10, 0))
+            self._step_icons.append(icon_lbl)
+            self._step_labels.append(text_lbl)
+
+        # Barra de progreso de descarga
+        self._update_progress = ctk.CTkProgressBar(frame, width=400, height=10,
                     progress_color=COLORS["gold"])
-        self._update_progress.pack(pady=(0, 8))
+        self._update_progress.pack(pady=(0, 6))
         self._update_progress.set(0)
 
         self._update_percent = ctk.CTkLabel(frame, text="0%",
@@ -232,29 +251,63 @@ class WelcomeXApp(ctk.CTk):
         threading.Thread(target=_download, daemon=True).start()
 
     def _update_set_progress(self, pct):
-        """Actualiza la barra de progreso"""
+        """Actualiza la barra de progreso durante la descarga"""
         self._update_progress.set(pct)
         self._update_percent.configure(text=f"{int(pct * 100)}%")
 
     def _update_finished(self, ok, installer_path):
-        """Finaliza la descarga: ejecuta el instalador y cierra la app"""
-        import subprocess, sys
+        """Descarga finalizada: actualiza pasos y lanza el instalador"""
         if ok:
-            self._update_status.configure(text="Instalando actualización...")
             self._update_progress.set(1)
             self._update_percent.configure(text="100%")
-            self.after(500, lambda: self._launch_installer(installer_path))
+
+            # Paso 2 → completado
+            self._step_icons[1].configure(text="✅")
+            self._step_labels[1].configure(text="Descarga completa", text_color=COLORS["text"])
+
+            # Paso 3 → activo con barra animada
+            self._step_icons[2].configure(text="🔄")
+            self._step_labels[2].configure(text="Instalando en segundo plano...", text_color=COLORS["gold"])
+
+            # Animar barra de forma indeterminada durante instalación
+            self._anim_val = 0.0
+            self._anim_dir = 1
+            def _animar():
+                if not self._update_win.winfo_exists():
+                    return
+                self._anim_val += 0.03 * self._anim_dir
+                if self._anim_val >= 1.0:
+                    self._anim_dir = -1
+                elif self._anim_val <= 0.0:
+                    self._anim_dir = 1
+                self._update_progress.set(self._anim_val)
+                self._update_win.after(30, _animar)
+            _animar()
+
+            # Tras 2s: marcar paso 3 listo y activar paso 4 antes de cerrar
+            def _pre_restart():
+                self._step_icons[2].configure(text="✅")
+                self._step_labels[2].configure(text="Instalación iniciada", text_color=COLORS["text"])
+                self._step_icons[3].configure(text="🔄")
+                self._step_labels[3].configure(text="Reiniciando WelcomeX...", text_color=COLORS["gold"])
+                self.after(1500, lambda: self._launch_installer(installer_path))
+
+            self.after(2000, _pre_restart)
         else:
-            self._update_status.configure(text="Error al descargar. Reintentando al próximo inicio.")
+            self._step_icons[1].configure(text="❌")
+            self._step_labels[1].configure(text="Error al descargar. Reintentando al próximo inicio.",
+                                          text_color="#ef4444")
             self._update_progress.configure(progress_color="#ef4444")
             self.after(3000, lambda: self._update_win.destroy())
 
     def _launch_installer(self, installer_path):
-        """Ejecuta el instalador en modo silencioso y cierra WelcomeX"""
+        """Ejecuta el instalador en modo silencioso, luego relanza WelcomeX automáticamente"""
         import subprocess, sys
+        exe_path = sys.executable
         try:
-            subprocess.Popen([installer_path, "/SILENT", "/CLOSEAPPLICATIONS"],
-                           creationflags=subprocess.DETACHED_PROCESS)
+            cmd = f'cmd /c "{installer_path}" /SILENT /CLOSEAPPLICATIONS && start "" "{exe_path}"'
+            subprocess.Popen(cmd, shell=True,
+                           creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW)
         except Exception:
             subprocess.Popen([installer_path])
         sys.exit(0)
@@ -441,17 +494,72 @@ class WelcomeXApp(ctk.CTk):
 
         threading.Thread(target=_fetch_changelog, daemon=True).start()
 
-        # Botón cerrar
-        btn_frame = ctk.CTkFrame(d, fg_color=COLORS["bg"], height=60)
+        # Footer con botones
+        btn_frame = ctk.CTkFrame(d, fg_color=COLORS["sidebar"], height=70, corner_radius=0)
         btn_frame.pack(fill="x", side="bottom")
+        btn_frame.pack_propagate(False)
+
+        inner_btn = ctk.CTkFrame(btn_frame, fg_color="transparent")
+        inner_btn.pack(expand=True)
+
+        # Botón verificar actualizaciones
+        check_btn = ctk.CTkButton(
+            inner_btn,
+            text="🔍 Verificar actualizaciones",
+            width=220, height=40,
+            fg_color=COLORS["primary"],
+            hover_color="#2563eb",
+            font=("Segoe UI", 13, "bold"),
+        )
+        check_btn.pack(side="left", padx=(0, 12), pady=15)
+
+        status_lbl = ctk.CTkLabel(
+            inner_btn,
+            text="",
+            font=("Segoe UI", 12),
+            text_color=COLORS["text_light"],
+            width=180
+        )
+        status_lbl.pack(side="left", padx=(0, 12))
+
         ctk.CTkButton(
-            btn_frame,
+            inner_btn,
             text=t("common.close"),
-            width=150, height=40,
+            width=110, height=40,
             fg_color=COLORS["border"],
             hover_color=COLORS["hover"],
             command=d.destroy
-        ).pack(pady=10)
+        ).pack(side="left", pady=15)
+
+        def _verificar_ahora():
+            check_btn.configure(state="disabled", text="⏳ Verificando...")
+            status_lbl.configure(text="", text_color=COLORS["text_light"])
+
+            def _check():
+                from config.settings import APP_VERSION as _ver
+                update = self.pampa.check_for_updates(_ver)
+                d.after(0, lambda: _mostrar_resultado(update))
+
+            def _mostrar_resultado(update):
+                check_btn.configure(state="normal", text="🔍 Verificar actualizaciones")
+                if update:
+                    latest = update.get("latest_version", "?")
+                    status_lbl.configure(
+                        text=f"⬆️ v{latest} disponible — descargando...",
+                        text_color="#10b981"
+                    )
+                    self.update_info = update
+                    # Lanzar auto-update (descarga silenciosa)
+                    d.after(1500, lambda: (d.destroy(), self._auto_update()))
+                else:
+                    status_lbl.configure(
+                        text="✅ Ya tenés la última versión",
+                        text_color="#10b981"
+                    )
+
+            threading.Thread(target=_check, daemon=True).start()
+
+        check_btn.configure(command=_verificar_ahora)
 
     # ============================================
     # UTILIDADES
