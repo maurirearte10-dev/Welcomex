@@ -173,77 +173,45 @@ class WelcomeXApp(ctk.CTk):
         threading.Thread(target=_check, daemon=True).start()
 
     def _auto_update(self):
-        """Muestra diálogo de confirmación antes de descargar la actualización"""
+        """Descarga e instala la actualización automáticamente (sin confirmación)"""
         if not self.update_info:
             return
 
         version = self.update_info["latest_version"]
         download_url = self.update_info.get("download_url", "")
-        changelog = self.update_info.get("changelog", {})
         if not download_url:
             return
 
-        # ── Ventana de confirmación ──────────────────────────────────
-        confirm_win = ctk.CTkToplevel(self)
-        confirm_win.title("Nueva actualización disponible")
-        confirm_win.geometry("480x300")
-        confirm_win.resizable(False, False)
-        confirm_win.transient(self)
-        confirm_win.grab_set()
-        x = (confirm_win.winfo_screenwidth() - 480) // 2
-        y = (confirm_win.winfo_screenheight() - 300) // 2
-        confirm_win.geometry(f"+{x}+{y}")
+        # Toast informativo (no bloquea la app)
+        toast = ctk.CTkToplevel(self)
+        toast.title("")
+        toast.geometry("380x80")
+        toast.resizable(False, False)
+        toast.overrideredirect(True)  # Sin bordes de ventana
+        x = (toast.winfo_screenwidth() - 380) // 2
+        y = toast.winfo_screenheight() - 130
+        toast.geometry(f"+{x}+{y}")
+        toast.attributes("-alpha", 0.92)
 
-        frame = ctk.CTkFrame(confirm_win, fg_color=COLORS["card"])
-        frame.pack(expand=True, fill="both", padx=20, pady=20)
+        toast_frame = ctk.CTkFrame(toast, fg_color=COLORS["card"],
+                                   corner_radius=12, border_width=1,
+                                   border_color=COLORS["gold"])
+        toast_frame.pack(expand=True, fill="both", padx=4, pady=4)
 
-        ctk.CTkLabel(frame, text=f"WelcomeX v{version} disponible",
-                    font=("Segoe UI", 18, "bold"),
-                    text_color=COLORS["gold"]).pack(pady=(15, 5))
+        ctk.CTkLabel(toast_frame,
+                     text=f"⬇  Actualizando a WelcomeX v{version}...",
+                     font=("Segoe UI", 13, "bold"),
+                     text_color=COLORS["gold"]).pack(expand=True)
 
-        # Changelog
-        lang_key = "es"
-        changes = changelog.get(lang_key, changelog.get("es", []))
-        if changes:
-            changes_text = "\n".join(f"• {c}" for c in changes[:4])
-        else:
-            changes_text = "Mejoras y correcciones"
-
-        ctk.CTkLabel(frame, text=changes_text,
-                    font=("Segoe UI", 12), text_color=COLORS["text_light"],
-                    justify="left", wraplength=400).pack(pady=(5, 15), padx=10)
-
-        # Botones
-        btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        btn_frame.pack(pady=(5, 15))
-
-        def do_update():
-            confirm_win.destroy()
+        # Cerrar toast y lanzar descarga después de 2 segundos
+        def _start():
+            try:
+                toast.destroy()
+            except Exception:
+                pass
             self._start_download(version, download_url)
 
-        def skip_update():
-            confirm_win.grab_release()
-            confirm_win.destroy()
-
-        confirm_win.protocol("WM_DELETE_WINDOW", skip_update)
-
-        ctk.CTkButton(btn_frame, text="Actualizar ahora",
-                     command=do_update,
-                     width=180, height=42,
-                     font=("Segoe UI", 13, "bold"),
-                     fg_color=COLORS["gold"],
-                     text_color="#1a1a1a",
-                     hover_color="#e6c200").pack(side="left", padx=8)
-
-        ctk.CTkButton(btn_frame, text="Más tarde",
-                     command=skip_update,
-                     width=130, height=42,
-                     font=("Segoe UI", 13),
-                     fg_color="transparent",
-                     border_width=1,
-                     border_color=COLORS["border"],
-                     text_color=COLORS["text_light"],
-                     hover_color=COLORS["hover"]).pack(side="left", padx=8)
+        self.after(2000, _start)
 
     def _start_download(self, version, download_url):
         """Muestra ventana de progreso y descarga la actualización"""
