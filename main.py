@@ -182,36 +182,8 @@ class WelcomeXApp(ctk.CTk):
         if not download_url:
             return
 
-        # Toast informativo (no bloquea la app)
-        toast = ctk.CTkToplevel(self)
-        toast.title("")
-        toast.geometry("380x80")
-        toast.resizable(False, False)
-        toast.overrideredirect(True)  # Sin bordes de ventana
-        x = (toast.winfo_screenwidth() - 380) // 2
-        y = toast.winfo_screenheight() - 130
-        toast.geometry(f"+{x}+{y}")
-        toast.attributes("-alpha", 0.92)
-
-        toast_frame = ctk.CTkFrame(toast, fg_color=COLORS["card"],
-                                   corner_radius=12, border_width=1,
-                                   border_color=COLORS["gold"])
-        toast_frame.pack(expand=True, fill="both", padx=4, pady=4)
-
-        ctk.CTkLabel(toast_frame,
-                     text=f"⬇  Actualizando a WelcomeX v{version}...",
-                     font=("Segoe UI", 13, "bold"),
-                     text_color=COLORS["gold"]).pack(expand=True)
-
-        # Cerrar toast y lanzar descarga después de 2 segundos
-        def _start():
-            try:
-                toast.destroy()
-            except Exception:
-                pass
-            self._start_download(version, download_url)
-
-        self.after(2000, _start)
+        # Lanzar descarga directamente después de 1 segundo
+        self.after(1000, lambda: self._start_download(version, download_url))
 
     def _start_download(self, version, download_url):
         """Muestra ventana de progreso y descarga la actualización"""
