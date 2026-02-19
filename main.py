@@ -173,48 +173,112 @@ class WelcomeXApp(ctk.CTk):
         threading.Thread(target=_check, daemon=True).start()
 
     def _auto_update(self):
-        """Descarga e instala la actualización automáticamente"""
+        """Muestra diálogo de confirmación antes de descargar la actualización"""
         if not self.update_info:
             return
 
         version = self.update_info["latest_version"]
         download_url = self.update_info.get("download_url", "")
+        changelog = self.update_info.get("changelog", {})
         if not download_url:
             return
 
-        # Ventana de progreso
+        # ── Ventana de confirmación ──────────────────────────────────
+        confirm_win = ctk.CTkToplevel(self)
+        confirm_win.title("Nueva actualización disponible")
+        confirm_win.geometry("480x300")
+        confirm_win.resizable(False, False)
+        confirm_win.transient(self)
+        confirm_win.grab_set()
+        x = (confirm_win.winfo_screenwidth() - 480) // 2
+        y = (confirm_win.winfo_screenheight() - 300) // 2
+        confirm_win.geometry(f"+{x}+{y}")
+
+        frame = ctk.CTkFrame(confirm_win, fg_color=COLORS["card"])
+        frame.pack(expand=True, fill="both", padx=20, pady=20)
+
+        ctk.CTkLabel(frame, text=f"WelcomeX v{version} disponible",
+                    font=("Segoe UI", 18, "bold"),
+                    text_color=COLORS["gold"]).pack(pady=(15, 5))
+
+        # Changelog
+        lang_key = "es"
+        changes = changelog.get(lang_key, changelog.get("es", []))
+        if changes:
+            changes_text = "\n".join(f"• {c}" for c in changes[:4])
+        else:
+            changes_text = "Mejoras y correcciones"
+
+        ctk.CTkLabel(frame, text=changes_text,
+                    font=("Segoe UI", 12), text_color=COLORS["text_light"],
+                    justify="left", wraplength=400).pack(pady=(5, 15), padx=10)
+
+        # Botones
+        btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        btn_frame.pack(pady=(5, 15))
+
+        def do_update():
+            confirm_win.destroy()
+            self._start_download(version, download_url)
+
+        def skip_update():
+            confirm_win.grab_release()
+            confirm_win.destroy()
+
+        confirm_win.protocol("WM_DELETE_WINDOW", skip_update)
+
+        ctk.CTkButton(btn_frame, text="Actualizar ahora",
+                     command=do_update,
+                     width=180, height=42,
+                     font=("Segoe UI", 13, "bold"),
+                     fg_color=COLORS["gold"],
+                     text_color="#1a1a1a",
+                     hover_color="#e6c200").pack(side="left", padx=8)
+
+        ctk.CTkButton(btn_frame, text="Más tarde",
+                     command=skip_update,
+                     width=130, height=42,
+                     font=("Segoe UI", 13),
+                     fg_color="transparent",
+                     border_width=1,
+                     border_color=COLORS["border"],
+                     text_color=COLORS["text_light"],
+                     hover_color=COLORS["hover"]).pack(side="left", padx=8)
+
+    def _start_download(self, version, download_url):
+        """Muestra ventana de progreso y descarga la actualización"""
+        # Ventana de progreso (sin botón cerrar)
         self._update_win = ctk.CTkToplevel(self)
-        self._update_win.title("Actualización")
-        self._update_win.geometry("480x220")
+        self._update_win.title("Descargando actualización")
+        self._update_win.geometry("480x200")
         self._update_win.resizable(False, False)
         self._update_win.transient(self)
         self._update_win.grab_set()
         x = (self._update_win.winfo_screenwidth() - 480) // 2
-        y = (self._update_win.winfo_screenheight() - 220) // 2
+        y = (self._update_win.winfo_screenheight() - 200) // 2
         self._update_win.geometry(f"+{x}+{y}")
         self._update_win.protocol("WM_DELETE_WINDOW", lambda: None)
 
         frame = ctk.CTkFrame(self._update_win, fg_color=COLORS["card"])
         frame.pack(expand=True, fill="both", padx=20, pady=20)
 
-        ctk.CTkLabel(frame, text=f"Actualizando a v{version}",
-                    font=("Segoe UI", 20, "bold"),
+        ctk.CTkLabel(frame, text=f"Descargando v{version}...",
+                    font=("Segoe UI", 18, "bold"),
                     text_color=COLORS["gold"]).pack(pady=(15, 5))
 
-        self._update_status = ctk.CTkLabel(frame, text="Descargando actualización...",
-                    font=("Segoe UI", 13), text_color=COLORS["text_light"])
+        self._update_status = ctk.CTkLabel(frame, text="Por favor, no cierres el programa",
+                    font=("Segoe UI", 12), text_color=COLORS["text_light"])
         self._update_status.pack(pady=(5, 10))
 
-        self._update_progress = ctk.CTkProgressBar(frame, width=380, height=12,
+        self._update_progress = ctk.CTkProgressBar(frame, width=400, height=14,
                     progress_color=COLORS["gold"])
-        self._update_progress.pack(pady=(0, 10))
+        self._update_progress.pack(pady=(0, 8))
         self._update_progress.set(0)
 
         self._update_percent = ctk.CTkLabel(frame, text="0%",
                     font=("Segoe UI", 12), text_color=COLORS["text_light"])
         self._update_percent.pack()
 
-        # Descargar en background
         import threading, tempfile, os
         dest = os.path.join(tempfile.gettempdir(), "WelcomeX_Setup.exe")
 
