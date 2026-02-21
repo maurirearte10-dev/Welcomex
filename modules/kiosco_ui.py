@@ -430,16 +430,13 @@ class KioscoWindow(ctk.CTkToplevel):
         else:
             # Solo overlay
             print(f"[VIDEO] Sin video, solo overlay")
-            nombre = f"{invitado['nombre']} {invitado['apellido']}"
-            
-            # Verificar si debe mostrar mesa (configuración del evento)
-            mostrar_mesa = self.evento.get('mostrar_mesa', 1)  # Default: sí mostrar
-            
-            if mostrar_mesa and invitado.get('mesa'):
-                mesa_texto = f"MESA {invitado['mesa']}"
-                self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\n{mesa_texto}", "#10b981", 3000)
-            else:
-                self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}", "#10b981", 3000)
+            if self.evento.get('mostrar_bienvenida', 1):
+                nombre = f"{invitado['nombre']} {invitado['apellido']}"
+                mostrar_mesa = self.evento.get('mostrar_mesa', 1)
+                if mostrar_mesa and invitado.get('mesa'):
+                    self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\nMESA {invitado['mesa']}", "#10b981", 3000)
+                else:
+                    self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}", "#10b981", 3000)
         
         print(f"[FIN] Proceso completado\n")
     
@@ -523,18 +520,17 @@ class KioscoWindow(ctk.CTkToplevel):
     def _mostrar_overlay_bienvenida(self):
         """Mostrar overlay de bienvenida después del video"""
         invitado = self.invitado_temp
-        nombre = f"{invitado['nombre']} {invitado['apellido']}"
+        if self.evento.get('mostrar_bienvenida', 1):
+            nombre = f"{invitado['nombre']} {invitado['apellido']}"
+            mostrar_mesa = self.evento.get('mostrar_mesa', 1)
+            if mostrar_mesa and invitado.get('mesa'):
+                self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\nMESA {invitado['mesa']}", "#10b981", 3000)
+            else:
+                self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}", "#10b981", 3000)
 
-        mostrar_mesa = self.evento.get('mostrar_mesa', 1)
-
-        if mostrar_mesa and invitado.get('mesa'):
-            mesa_texto = f"MESA {invitado['mesa']}"
-            self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\n{mesa_texto}", "#10b981", 3000)
-        else:
-            self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}", "#10b981", 3000)
-
-        # Reanudar video principal después del overlay
-        self.after(3000, lambda: self.reanudar_video_principal(self.video_principal_activo_backup))
+        # Reanudar video principal después del overlay (con o sin cartel)
+        delay = 3000 if self.evento.get('mostrar_bienvenida', 1) else 0
+        self.after(delay, lambda: self.reanudar_video_principal(self.video_principal_activo_backup))
 
     def _reproducir_video_temporal_opencv(self, video_path):
         """Fallback: Reproducir video temporal con OpenCV (sin audio)"""
@@ -548,10 +544,12 @@ class KioscoWindow(ctk.CTkToplevel):
 
             if not cap_temp.isOpened():
                 print(f"[ERROR] No se pudo abrir video temporal")
-                nombre = f"{invitado['nombre']} {invitado['apellido']}"
-                mesa = f"MESA {invitado['mesa']}" if invitado.get('mesa') else ""
-                self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\n{mesa}", "#10b981", 3000)
-                self.after(3000, lambda: self.reanudar_video_principal(self.video_principal_activo_backup))
+                if self.evento.get('mostrar_bienvenida', 1):
+                    nombre = f"{invitado['nombre']} {invitado['apellido']}"
+                    mesa = f"MESA {invitado['mesa']}" if invitado.get('mesa') else ""
+                    self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\n{mesa}", "#10b981", 3000)
+                self.after(3000 if self.evento.get('mostrar_bienvenida', 1) else 0,
+                           lambda: self.reanudar_video_principal(self.video_principal_activo_backup))
                 return
 
             fps = cap_temp.get(cv2.CAP_PROP_FPS) or 30
@@ -594,17 +592,26 @@ class KioscoWindow(ctk.CTkToplevel):
         except Exception as e:
             print(f"[ERROR] Error en video temporal OpenCV: {e}")
             self.reanudar_video_principal(self.video_principal_activo_backup)
-            # Mostrar overlay
-            nombre = f"{invitado['nombre']} {invitado['apellido']}"
-            mesa = f"MESA {invitado['mesa']}" if invitado.get('mesa') else ""
-            self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\n{mesa}", "#10b981", 3000)
+            if self.evento.get('mostrar_bienvenida', 1):
+                nombre = f"{invitado['nombre']} {invitado['apellido']}"
+                mesa = f"MESA {invitado['mesa']}" if invitado.get('mesa') else ""
+                self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\n{mesa}", "#10b981", 3000)
     
     def reanudar_video_principal(self, estado_previo):
         """Reanudar video loop principal"""
         print(f"[KIOSCO] Reanudando video principal")
         self.video_activo = estado_previo
         if self.video_activo:
-            self.reproducir_frame()
+            # Si VLC es el player principal, reanudarlo (fue pausado)
+            if hasattr(self, 'vlc_player') and self.vlc_player:
+                try:
+                    self.vlc_player.play()
+                    print(f"[KIOSCO] Video principal VLC reanudado")
+                except Exception as e:
+                    print(f"[KIOSCO] Error reanudando VLC: {e}")
+            else:
+                # Fallback OpenCV
+                self.reproducir_frame()
     
     def mostrar_overlay(self, texto, color, duracion):
         """Mostrar overlay temporal - OPTIMIZADO"""
