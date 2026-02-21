@@ -87,7 +87,11 @@ class KioscoWindow(ctk.CTkToplevel):
         self.ultimo_timestamp = None
         self.velocidad_teclas = []
         self.keyboard_listener = None
-        
+
+        # Último invitado acreditado (para repetir con F5 o re-scan)
+        self.ultimo_invitado_acreditado = None
+        self.ultimo_video_acreditado = None
+
         # VLC player para video con audio
         self.vlc_instance = None
         self.vlc_player = None
@@ -107,6 +111,7 @@ class KioscoWindow(ctk.CTkToplevel):
         # Bindings locales (cuando tiene foco)
         self.bind('<F11>', lambda e: self.toggle_fullscreen())
         self.bind('<Escape>', lambda e: self.cerrar_directo())
+        self.bind('<F5>', lambda e: self.repetir_ultima_acreditacion())
         self.bind('<Key>', self.capturar_tecla)
         
         # FIX: Variable para prevenir recursión
@@ -357,79 +362,90 @@ class KioscoWindow(ctk.CTkToplevel):
         
         if not qr_code or len(qr_code) < 5:
             print(f"[ERROR] QR inválido: muy corto o vacío")
+            self._beep("error")
             self.mostrar_overlay("❌ QR INVÁLIDO", "#ef4444", 2000)
             return
-        
+
         print(f"[BÚSQUEDA] Buscando en BD: '{qr_code}'")
-        
+
         # Importar database
         from modules.database import db
-        
+
         # Buscar invitado por QR
         invitado = db.obtener_invitado_por_qr(qr_code)
-        
+
         if not invitado:
             print(f"[ERROR] ❌ Invitado NO encontrado en BD")
-            print(f"[INFO] Verifica que el QR '{qr_code}' exista en tabla invitados")
+            self._beep("error")
             self.mostrar_overlay("❌ QR NO REGISTRADO", "#ef4444", 3000)
             return
-        
+
         # Invitado encontrado
         print(f"[OK] ✅ Invitado: {invitado['nombre']} {invitado['apellido']}")
         print(f"[OK] Mesa: {invitado.get('mesa', 'Sin mesa')}")
-        print(f"[OK] Evento ID: {invitado['evento_id']}")
-        
+
         # Verificar que sea del evento correcto
         if invitado['evento_id'] != self.evento['id']:
             print(f"[ERROR] ❌ Evento incorrecto")
-            print(f"[INFO] QR es de evento {invitado['evento_id']}, kiosco es evento {self.evento['id']}")
+            self._beep("error")
             self.mostrar_overlay("❌ QR DE OTRO EVENTO", "#ef4444", 3000)
             return
-        
-        # Verificar si ya está presente
+
+        # Verificar si ya está presente → repetir video/overlay
         if invitado.get('presente'):
-            print(f"[WARN] ⚠️ Ya está acreditado")
-            nombre = f"{invitado['nombre']} {invitado['apellido']}"
-            
-            # Verificar configuración mostrar_mesa
-            mostrar_mesa = self.evento.get('mostrar_mesa', 1)
-            
-            if mostrar_mesa and invitado.get('mesa'):
-                mesa_texto = f"Mesa {invitado['mesa']}"
-                self.mostrar_overlay(f"⚠️ YA ACREDITADO\n{nombre}\n{mesa_texto}", "#f59e0b", 3000)
-            else:
-                self.mostrar_overlay(f"⚠️ YA ACREDITADO\n{nombre}", "#f59e0b", 3000)
+            print(f"[WARN] ⚠️ Ya acreditado — repitiendo presentación")
+            self._beep("repetir")
+            self._mostrar_acreditacion(invitado, repetir=True)
             return
-        
+
         # ACREDITAR
         print(f"[ACCIÓN] Acreditando invitado ID={invitado['id']}...")
         resultado = db.acreditar_invitado(invitado['id'], self.evento['id'], self.kiosco_id)
-        
+
         if not resultado:
             print(f"[ERROR] ❌ Fallo al acreditar en BD")
+            self._beep("error")
             self.mostrar_overlay("❌ ERROR AL ACREDITAR", "#ef4444", 3000)
             return
-        
+
         print(f"[OK] ✅ Acreditación exitosa")
-        
-        # Buscar video
+        self._beep("ok")
+        self._mostrar_acreditacion(invitado, repetir=False)
+        print(f"[FIN] Proceso completado\n")
+
+    def _beep(self, tipo):
+        """Sonido sutil de sistema según el resultado"""
+        try:
+            import winsound
+            if tipo == "ok":
+                winsound.MessageBeep(winsound.MB_OK)          # ding suave
+            elif tipo == "repetir":
+                winsound.Beep(880, 120)                        # tono corto (re-scan)
+            elif tipo == "error":
+                winsound.MessageBeep(winsound.MB_ICONHAND)     # sonido de error Windows
+        except Exception:
+            pass  # Si falla (no Windows / sin audio), no hace nada
+
+    def _mostrar_acreditacion(self, invitado, repetir=False):
+        """Reproduce video y/o muestra overlay de bienvenida"""
+        from modules.database import db
+
         video_personalizado = invitado.get('video_personalizado')
         video_mesa = None
-        
+
         if not video_personalizado and invitado.get('mesa'):
-            print(f"[VIDEO] Buscando video de mesa {invitado['mesa']}...")
             video_mesa = db.obtener_video_por_mesa(self.evento['id'], invitado['mesa'])
-            if video_mesa:
-                print(f"[VIDEO] Video de mesa encontrado: {video_mesa}")
-        
+
         video_a_reproducir = video_personalizado or video_mesa
-        
+
+        # Guardar para repetir con F5
+        self.ultimo_invitado_acreditado = invitado
+        self.ultimo_video_acreditado = video_a_reproducir
+
         if video_a_reproducir and os.path.exists(video_a_reproducir):
             print(f"[VIDEO] Reproduciendo: {video_a_reproducir}")
             self.reproducir_video_temporal(invitado, video_a_reproducir)
         else:
-            # Solo overlay
-            print(f"[VIDEO] Sin video, solo overlay")
             if self.evento.get('mostrar_bienvenida', 1):
                 nombre = f"{invitado['nombre']} {invitado['apellido']}"
                 mostrar_mesa = self.evento.get('mostrar_mesa', 1)
@@ -437,8 +453,14 @@ class KioscoWindow(ctk.CTkToplevel):
                     self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\nMESA {invitado['mesa']}", "#10b981", 3000)
                 else:
                     self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}", "#10b981", 3000)
-        
-        print(f"[FIN] Proceso completado\n")
+
+    def repetir_ultima_acreditacion(self):
+        """F5 — repite el video/overlay del último invitado acreditado"""
+        if not self.ultimo_invitado_acreditado:
+            return
+        print(f"[F5] Repitiendo acreditación: {self.ultimo_invitado_acreditado['nombre']}")
+        self._beep("repetir")
+        self._mostrar_acreditacion(self.ultimo_invitado_acreditado, repetir=True)
     
     def reproducir_video_temporal(self, invitado, video_path):
         """Reproducir video personalizado/mesa con VLC (audio incluido)"""
@@ -659,6 +681,11 @@ class KioscoWindow(ctk.CTkToplevel):
                 self.qr_buffer += key.char
                 print(f"[📝] '{key.char}' → {self.qr_buffer}")
                 
+            # F5 → repetir última acreditación
+            elif key == keyboard.Key.f5:
+                self.after(0, self.repetir_ultima_acreditacion)
+                return
+
             # Si es Enter, procesar QR
             elif key == keyboard.Key.enter:
                 print(f"\n[⏎ ENTER] Procesando: '{self.qr_buffer}'")
