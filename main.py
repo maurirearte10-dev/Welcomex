@@ -772,13 +772,13 @@ class WelcomeXApp(ctk.CTk):
                      width=110, height=45, fg_color="transparent",
                      border_width=2, border_color=COLORS["border"],
                      font=("Arial", 14)).pack(side="left")
-        
-        ctk.CTkLabel(header, text="👥 Gestión de Usuarios", 
-                    font=("Arial", 30, "bold")).pack(side="left", padx=25)
-        
+
         ctk.CTkButton(header, text="➕ Nuevo Usuario", command=self.crear_usuario_dialog,
                      height=45, width=160, fg_color=COLORS["success"],
                      font=("Arial", 14)).pack(side="right")
+
+        ctk.CTkLabel(header, text="👥 Gestión de Usuarios",
+                    font=("Arial", 30, "bold")).pack(side="left", padx=25)
         
         # Obtener usuarios
         usuarios = db.obtener_todos_usuarios()
@@ -2337,15 +2337,16 @@ class WelcomeXApp(ctk.CTk):
         header = ctk.CTkFrame(self.content, fg_color="transparent")
         header.pack(fill="x", pady=(0, 25))
         
-        ctk.CTkLabel(header, text=t("events.title"), font=("Arial", 34, "bold")).pack(side="left")
-
-        # Estado licencia PAMPA (visible para todos)
-        self.mostrar_estado_licencia(header)
-
+        # RIGHT elements first so they always get space
         if self.tiene_permiso('crear_eventos'):
             ctk.CTkButton(header, text=f"➕ {t('events.new_event')}", command=self.crear_evento,
                          height=50, width=180, font=("Arial", 15, "bold"),
                          fg_color=COLORS["success"]).pack(side="right")
+
+        # Estado licencia PAMPA (visible para todos)
+        self.mostrar_estado_licencia(header)
+
+        ctk.CTkLabel(header, text=t("events.title"), font=("Arial", 34, "bold")).pack(side="left")
 
         # Obtener eventos
         eventos = db.obtener_eventos_usuario(self.usuario_actual['id'])
@@ -3264,12 +3265,8 @@ class WelcomeXApp(ctk.CTk):
                      width=110, height=45, fg_color="transparent",
                      border_width=2, border_color=COLORS["border"],
                      font=("Arial", 14)).pack(side="left")
-        
-        ctk.CTkLabel(header, text=f"Invitados: {evento['nombre']}", 
-                    font=("Arial", 30, "bold")).pack(side="left", padx=25)
-        
-        # Botones
-        # Botones de edición (ocultos en modo demo)
+
+        # Botones RIGHT primero para que siempre tengan espacio
         if self.tiene_permiso('agregar_invitados') and not self.es_modo_demo():
             btn_group = ctk.CTkFrame(header, fg_color="transparent")
             btn_group.pack(side="right")
@@ -3285,6 +3282,9 @@ class WelcomeXApp(ctk.CTk):
             ctk.CTkButton(btn_group, text="🎨 Invitaciones", command=self.generar_invitaciones_dialog,
                          height=45, width=160, fg_color=COLORS["primary"],
                          font=("Arial", 14)).pack(side="left", padx=5)
+
+        ctk.CTkLabel(header, text=f"Invitados: {evento['nombre']}",
+                    font=("Arial", 30, "bold")).pack(side="left", padx=25)
         
         # Obtener invitados
         invitados_todos = db.obtener_invitados_evento(evento['id'])
@@ -3869,12 +3869,12 @@ class WelcomeXApp(ctk.CTk):
                      border_width=2, border_color=COLORS["border"],
                      font=("Arial", 14)).pack(side="left")
 
-        ctk.CTkLabel(header, text=f"🎲 {t('sorteo.title')}",
-                    font=("Arial", 30, "bold")).pack(side="left", padx=25)
-
         ctk.CTkButton(header, text=f"🎰 {t('sorteo.start_raffle')}", command=self.realizar_sorteo,
                      height=50, width=200, fg_color=COLORS["success"],
                      font=("Arial", 15, "bold")).pack(side="right")
+
+        ctk.CTkLabel(header, text=f"🎲 {t('sorteo.title')}",
+                    font=("Arial", 30, "bold")).pack(side="left", padx=25)
 
         # Obtener ganadores
         ganadores = db.obtener_ganadores(evento['id'])
