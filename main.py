@@ -26,14 +26,7 @@ from modules.sorteo import SorteoAnimacion, SorteoPorMesaAnimacion
 
 # Cargar preferencia de tema antes de crear la ventana
 def _load_theme():
-    try:
-        db.connect()
-        db.cursor.execute("SELECT valor FROM configuracion WHERE clave = 'dark_mode'")
-        row = db.cursor.fetchone()
-        db.disconnect()
-        return "dark" if (not row or row['valor'] == '1') else "light"
-    except:
-        return "dark"
+    return "dark"  # Solo modo oscuro
 
 ctk.set_appearance_mode(_load_theme())
 ctk.set_default_color_theme("blue")
@@ -1275,52 +1268,6 @@ class WelcomeXApp(ctk.CTk):
                              "para activarla en otro. Máximo 3 liberaciones por mes.",
                         font=("Arial", 11), text_color=COLORS["text_light"],
                         justify="left").pack(anchor="w", pady=(5, 0))
-
-        # ====================
-        # 2. APARIENCIA
-        # ====================
-        apariencia_card = ctk.CTkFrame(self.content, fg_color=COLORS["card"], corner_radius=10)
-        apariencia_card.pack(fill="x", pady=15)
-
-        ap_inner = ctk.CTkFrame(apariencia_card, fg_color="transparent")
-        ap_inner.pack(fill="x", padx=25, pady=20)
-
-        ctk.CTkLabel(ap_inner, text=f"🎨 {t('config.appearance')}",
-                    font=("Arial", 20, "bold")).pack(anchor="w", pady=(0, 15))
-
-        # Modo oscuro/claro
-        modo_frame = ctk.CTkFrame(ap_inner, fg_color="transparent")
-        modo_frame.pack(fill="x", pady=10)
-
-        ctk.CTkLabel(modo_frame, text=f"{t('config.dark_mode')}:",
-                    font=("Arial", 15)).pack(side="left")
-
-        # Obtener preferencia guardada
-        db.connect()
-        db.cursor.execute("SELECT valor FROM configuracion WHERE clave = 'dark_mode'")
-        row = db.cursor.fetchone()
-        dark_mode_actual = row['valor'] == '1' if row else False
-        db.disconnect()
-
-        modo_var = ctk.BooleanVar(value=dark_mode_actual)
-
-        def toggle_dark_mode():
-            nuevo_modo = modo_var.get()
-            # Guardar preferencia
-            db.connect()
-            db.cursor.execute('''
-                INSERT OR REPLACE INTO configuracion (clave, valor)
-                VALUES ('dark_mode', ?)
-            ''', ('1' if nuevo_modo else '0'))
-            db.connection.commit()
-            db.disconnect()
-
-            # Aplicar inmediatamente
-            ctk.set_appearance_mode("dark" if nuevo_modo else "light")
-
-        switch = ctk.CTkSwitch(modo_frame, text="", variable=modo_var,
-                               command=toggle_dark_mode, font=("Arial", 14))
-        switch.pack(side="left", padx=15)
 
         # ====================
         # 3. RUTAS Y CARPETAS
@@ -2638,76 +2585,93 @@ class WelcomeXApp(ctk.CTk):
                         font=("Arial", 12),
                         text_color=COLORS["text_light"]).pack(side="left")
 
-        # Botones
-        btn_frame = ctk.CTkFrame(card, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=25, pady=(0, 20))
-        
-        # Botones según estado
+        # Botones en 2 filas para que quepan en cualquier resolución
+        # Fila 1: acciones de ciclo de vida del evento
+        btn_row1 = ctk.CTkFrame(card, fg_color="transparent")
+        has_row1 = False
+        # Fila 2: gestión / navegación
+        btn_row2 = ctk.CTkFrame(card, fg_color="transparent")
+        has_row2 = False
+
+        # --- Fila 1: Ciclo de vida ---
         if evento['estado'] == 'creado':
             if self.tiene_permiso('iniciar_eventos'):
-                ctk.CTkButton(btn_frame, text="▶️ Iniciar", width=120, height=42,
+                ctk.CTkButton(btn_row1, text="▶️ Iniciar", width=120, height=42,
                              font=("Arial", 13),
                              command=lambda e=evento: self.iniciar_evento(e)).pack(side="left", padx=4)
-            
+                has_row1 = True
             if self.tiene_permiso('eliminar_eventos'):
-                ctk.CTkButton(btn_frame, text="🗑️ Borrar", width=120, height=42,
+                ctk.CTkButton(btn_row1, text="🗑️ Borrar", width=120, height=42,
                              font=("Arial", 13), fg_color=COLORS["danger"],
                              command=lambda e=evento: self.eliminar_evento(e)).pack(side="left", padx=4)
-        
+                has_row1 = True
+
         elif evento['estado'] == 'activo':
             if self.tiene_permiso('iniciar_eventos'):
-                ctk.CTkButton(btn_frame, text="⏸️ Pausar", width=120, height=42,
+                ctk.CTkButton(btn_row1, text="⏸️ Pausar", width=120, height=42,
                              font=("Arial", 13),
                              command=lambda e=evento: self.pausar_evento(e)).pack(side="left", padx=4)
-            
+                has_row1 = True
             if self.tiene_permiso('finalizar_eventos'):
-                ctk.CTkButton(btn_frame, text="⏹️ Finalizar", width=120, height=42,
+                ctk.CTkButton(btn_row1, text="⏹️ Finalizar", width=120, height=42,
                              font=("Arial", 13), fg_color=COLORS["danger"],
                              command=lambda e=evento: self.finalizar_evento(e)).pack(side="left", padx=4)
-        
+                has_row1 = True
+
         elif evento['estado'] == 'pausado':
             if self.tiene_permiso('iniciar_eventos'):
-                ctk.CTkButton(btn_frame, text="▶️ Reanudar", width=130, height=42,
+                ctk.CTkButton(btn_row1, text="▶️ Reanudar", width=130, height=42,
                              font=("Arial", 13),
                              command=lambda e=evento: self.reanudar_evento(e)).pack(side="left", padx=4)
-            
+                has_row1 = True
             if self.tiene_permiso('finalizar_eventos'):
-                ctk.CTkButton(btn_frame, text="⏹️ Finalizar", width=120, height=42,
+                ctk.CTkButton(btn_row1, text="⏹️ Finalizar", width=120, height=42,
                              font=("Arial", 13), fg_color=COLORS["danger"],
                              command=lambda e=evento: self.finalizar_evento(e)).pack(side="left", padx=4)
-            
+                has_row1 = True
             if self.tiene_permiso('eliminar_eventos'):
-                ctk.CTkButton(btn_frame, text="🗑️ Eliminar", width=120, height=42,
+                ctk.CTkButton(btn_row1, text="🗑️ Eliminar", width=120, height=42,
                              font=("Arial", 13), fg_color="#7f1d1d",
                              command=lambda e=evento: self.eliminar_evento(e)).pack(side="left", padx=4)
-        
+                has_row1 = True
+
         elif evento['estado'] == 'finalizado':
             if self.tiene_permiso('eliminar_eventos'):
-                ctk.CTkButton(btn_frame, text="🗑️ Eliminar", width=120, height=42,
+                ctk.CTkButton(btn_row1, text="🗑️ Eliminar", width=120, height=42,
                              font=("Arial", 13), fg_color="#7f1d1d",
                              command=lambda e=evento: self.eliminar_evento(e)).pack(side="left", padx=4)
-        
-        # Botones siempre disponibles
+                has_row1 = True
+
+        # --- Fila 2: Gestión ---
         if self.tiene_permiso('ver_invitados'):
-            ctk.CTkButton(btn_frame, text="👥 Invitados", width=130, height=42,
+            ctk.CTkButton(btn_row2, text="👥 Invitados", width=130, height=42,
                          font=("Arial", 13),
                          command=lambda e=evento: self.ver_invitados(e)).pack(side="left", padx=4)
-        
+            has_row2 = True
+
         if evento['estado'] == 'activo' and self.tiene_permiso('hacer_sorteos'):
-            ctk.CTkButton(btn_frame, text="🎲 Sorteos", width=120, height=42,
+            ctk.CTkButton(btn_row2, text="🎲 Sorteos", width=120, height=42,
                          font=("Arial", 13),
                          command=lambda e=evento: self.ver_sorteos(e)).pack(side="left", padx=4)
-        
+            has_row2 = True
+
         if evento['estado'] == 'activo' and self.tiene_permiso('abrir_kiosco'):
-            ctk.CTkButton(btn_frame, text="📱 Kiosco", width=120, height=42,
+            ctk.CTkButton(btn_row2, text="📱 Kiosco", width=120, height=42,
                          font=("Arial", 13),
                          command=lambda e=evento: self.abrir_kiosco(e)).pack(side="left", padx=4)
-        
-        # Botón editar (oculto en modo demo y si está finalizado)
+            has_row2 = True
+
         if evento['estado'] != 'finalizado' and self.tiene_permiso('crear_eventos') and not self.es_modo_demo():
-            ctk.CTkButton(btn_frame, text="✏️ Editar", width=110, height=42,
+            ctk.CTkButton(btn_row2, text="✏️ Editar", width=110, height=42,
                          font=("Arial", 13),
                          command=lambda e=evento: self.editar_evento(e)).pack(side="left", padx=4)
+            has_row2 = True
+
+        # Empaquetar solo las filas que tienen botones
+        if has_row1:
+            btn_row1.pack(fill="x", padx=25, pady=(0, 5 if has_row2 else 20))
+        if has_row2:
+            btn_row2.pack(fill="x", padx=25, pady=(0, 20))
     
     def crear_evento(self):
         """Formulario crear evento"""
@@ -3025,10 +2989,17 @@ class WelcomeXApp(ctk.CTk):
         
         # Checkbox mostrar mesa en overlay
         mostrar_mesa_var = ctk.BooleanVar(value=evento.get('mostrar_mesa', 1))
-        check_mesa = ctk.CTkCheckBox(scroll, text="Mostrar mesa en overlay de acreditación", 
+        check_mesa = ctk.CTkCheckBox(scroll, text="Mostrar mesa en overlay de acreditación",
                                      variable=mostrar_mesa_var,
                                      font=("Arial", 13))
         check_mesa.pack(anchor="w", pady=(10, 0))
+
+        # Checkbox mostrar cartel verde de bienvenida
+        mostrar_bienvenida_var = ctk.BooleanVar(value=evento.get('mostrar_bienvenida', 1))
+        check_bienvenida = ctk.CTkCheckBox(scroll, text="Mostrar cartel de bienvenida al acreditar",
+                                           variable=mostrar_bienvenida_var,
+                                           font=("Arial", 13))
+        check_bienvenida.pack(anchor="w", pady=(8, 0))
         
         # Separador
         ctk.CTkFrame(scroll, height=2, fg_color=COLORS["border"]).pack(fill="x", pady=15)
@@ -3050,14 +3021,16 @@ class WelcomeXApp(ctk.CTk):
             db.connect()
             try:
                 db.cursor.execute("""
-                    UPDATE eventos 
-                    SET nombre = ?, fecha_evento = ?, hora_inicio = ?, 
-                        hora_limite_acreditacion = ?, video_loop = ?, mostrar_mesa = ?
+                    UPDATE eventos
+                    SET nombre = ?, fecha_evento = ?, hora_inicio = ?,
+                        hora_limite_acreditacion = ?, video_loop = ?, mostrar_mesa = ?,
+                        mostrar_bienvenida = ?
                     WHERE id = ?
                 """, (nombre, fecha, hora,
                       e_limite.get().strip() if e_limite.get().strip() else None,
                       e_video.get().strip() if e_video.get().strip() else None,
                       1 if mostrar_mesa_var.get() else 0,
+                      1 if mostrar_bienvenida_var.get() else 0,
                       evento['id']))
                 
                 db.connection.commit()
