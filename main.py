@@ -166,54 +166,60 @@ class WelcomeXApp(ctk.CTk):
         threading.Thread(target=_check, daemon=True).start()
 
     def _auto_update(self):
-        """Descarga e instala la actualización automáticamente (sin confirmación)"""
+        """Muestra notificación y lanza la descarga automáticamente"""
         if not self.update_info:
             return
-
         version = self.update_info["latest_version"]
         download_url = self.update_info.get("download_url", "")
         if not download_url:
             return
-
-        # Lanzar descarga directamente después de 1 segundo
-        self.after(1000, lambda: self._start_download(version, download_url))
+        self.after(800, lambda: self._start_download(version, download_url))
 
     def _start_download(self, version, download_url):
-        """Muestra ventana con pasos del proceso de actualización y descarga"""
+        """Ventana prominente de actualización con progreso en tiempo real"""
+        import threading, tempfile, os
+
         self._update_win = ctk.CTkToplevel(self)
-        self._update_win.title(f"Actualizando a v{version}")
-        self._update_win.geometry("480x360")
+        self._update_win.title(f"Actualizando WelcomeX a v{version}")
+        self._update_win.geometry("520x440")
         self._update_win.resizable(False, False)
         self._update_win.transient(self)
-        # NO grab_set() — no bloquear la app mientras descarga
-        x = (self._update_win.winfo_screenwidth() - 480) // 2
-        y = (self._update_win.winfo_screenheight() - 360) // 2
+        self._update_win.attributes('-topmost', True)   # Siempre al frente
+        self._update_win.protocol("WM_DELETE_WINDOW", lambda: None)  # No se puede cerrar
+
+        x = (self._update_win.winfo_screenwidth() - 520) // 2
+        y = (self._update_win.winfo_screenheight() - 440) // 2
         self._update_win.geometry(f"+{x}+{y}")
-        self._update_win.protocol("WM_DELETE_WINDOW", lambda: None)
+        self._update_win.lift()
+        self._update_win.focus_force()
 
         frame = ctk.CTkFrame(self._update_win, fg_color=COLORS["card"])
         frame.pack(expand=True, fill="both", padx=24, pady=24)
 
-        ctk.CTkLabel(frame, text=f"Actualizando a v{version}",
-                    font=("Segoe UI", 17, "bold"),
-                    text_color=COLORS["gold"]).pack(pady=(10, 18))
+        # Título
+        ctk.CTkLabel(frame, text="⬆️  Actualización disponible",
+                    font=("Segoe UI", 19, "bold"),
+                    text_color=COLORS["gold"]).pack(pady=(10, 4))
+        ctk.CTkLabel(frame, text=f"Instalando versión {version}",
+                    font=("Segoe UI", 13),
+                    text_color=COLORS["text_light"]).pack(pady=(0, 18))
 
-        # Pasos con iconos de estado
+        # Pasos
         steps_data = [
-            ("✅", "Nueva versión detectada",    COLORS["text"]),
+            ("✅", "Nueva versión detectada",      COLORS["text"]),
             ("🔄", "Descargando actualización...", COLORS["gold"]),
-            ("⏳", "Instalando en segundo plano", COLORS["text_light"]),
-            ("⏳", "Reiniciando WelcomeX",         COLORS["text_light"]),
+            ("⏳", "Instalando",                   COLORS["text_light"]),
+            ("⏳", "Reiniciando WelcomeX",          COLORS["text_light"]),
         ]
-        self._step_icons = []
+        self._step_icons  = []
         self._step_labels = []
-        steps_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        steps_frame.pack(fill="x", padx=10, pady=(0, 14))
+        steps_frame = ctk.CTkFrame(frame, fg_color=COLORS["bg"], corner_radius=8)
+        steps_frame.pack(fill="x", padx=4, pady=(0, 16))
 
         for icon, text, color in steps_data:
             row = ctk.CTkFrame(steps_frame, fg_color="transparent")
-            row.pack(fill="x", pady=5)
-            icon_lbl = ctk.CTkLabel(row, text=icon, font=("Segoe UI", 15), width=28)
+            row.pack(fill="x", padx=14, pady=6)
+            icon_lbl = ctk.CTkLabel(row, text=icon, font=("Segoe UI", 16), width=28)
             icon_lbl.pack(side="left")
             text_lbl = ctk.CTkLabel(row, text=text, font=("Segoe UI", 13),
                                    text_color=color, anchor="w")
@@ -221,21 +227,29 @@ class WelcomeXApp(ctk.CTk):
             self._step_icons.append(icon_lbl)
             self._step_labels.append(text_lbl)
 
-        # Barra de progreso de descarga
-        self._update_progress = ctk.CTkProgressBar(frame, width=400, height=10,
-                    progress_color=COLORS["gold"])
-        self._update_progress.pack(pady=(0, 6))
+        # Barra de progreso
+        self._update_progress = ctk.CTkProgressBar(frame, height=14,
+                    progress_color=COLORS["gold"], corner_radius=7)
+        self._update_progress.pack(fill="x", padx=4, pady=(0, 6))
         self._update_progress.set(0)
 
-        self._update_percent = ctk.CTkLabel(frame, text="0%",
+        # Texto de progreso detallado
+        self._update_detail = ctk.CTkLabel(frame, text="Iniciando descarga...",
                     font=("Segoe UI", 12), text_color=COLORS["text_light"])
-        self._update_percent.pack()
+        self._update_detail.pack(pady=(0, 10))
 
-        import threading, tempfile, os
+        # Advertencia
+        warn_frame = ctk.CTkFrame(frame, fg_color="#2d1b00", corner_radius=8)
+        warn_frame.pack(fill="x", padx=4, pady=(4, 0))
+        ctk.CTkLabel(warn_frame, text="⚠️  No cierres la aplicación durante la actualización",
+                    font=("Segoe UI", 11), text_color="#f59e0b").pack(pady=8)
+
+        # Iniciar descarga en hilo
         dest = os.path.join(tempfile.gettempdir(), "WelcomeX_Setup.exe")
 
-        def _progress(pct):
-            self.after(0, lambda p=pct: self._update_set_progress(p))
+        def _progress(pct, downloaded, total):
+            self.after(0, lambda p=pct, d=downloaded, t=total:
+                       self._update_set_progress(p, d, t))
 
         def _download():
             ok = self.pampa.download_update(download_url, dest, progress_callback=_progress)
@@ -243,32 +257,42 @@ class WelcomeXApp(ctk.CTk):
 
         threading.Thread(target=_download, daemon=True).start()
 
-    def _update_set_progress(self, pct):
-        """Actualiza la barra de progreso durante la descarga"""
+    def _update_set_progress(self, pct, downloaded, total):
+        """Actualiza barra de progreso con MB descargados"""
+        if not hasattr(self, '_update_win') or not self._update_win.winfo_exists():
+            return
         self._update_progress.set(pct)
-        self._update_percent.configure(text=f"{int(pct * 100)}%")
+        mb_down  = downloaded / 1_048_576
+        mb_total = total      / 1_048_576
+        pct_int  = int(pct * 100)
+        if mb_total > 0:
+            self._update_detail.configure(
+                text=f"Descargando...  {mb_down:.1f} MB / {mb_total:.1f} MB  ({pct_int}%)"
+            )
+        else:
+            self._update_detail.configure(text=f"Descargando... {pct_int}%")
 
     def _update_finished(self, ok, installer_path):
         """Descarga finalizada: actualiza pasos y lanza el instalador"""
+        if not hasattr(self, '_update_win') or not self._update_win.winfo_exists():
+            return
         if ok:
             self._update_progress.set(1)
-            self._update_percent.configure(text="100%")
+            self._update_detail.configure(text="Descarga completa ✅")
 
-            # Paso 2 → completado
             self._step_icons[1].configure(text="✅")
             self._step_labels[1].configure(text="Descarga completa", text_color=COLORS["text"])
 
-            # Paso 3 → activo con barra animada
+            # Paso 3: instalando (barra animada)
             self._step_icons[2].configure(text="🔄")
-            self._step_labels[2].configure(text="Instalando en segundo plano...", text_color=COLORS["gold"])
+            self._step_labels[2].configure(text="Instalando...", text_color=COLORS["gold"])
 
-            # Animar barra de forma indeterminada durante instalación
             self._anim_val = 0.0
             self._anim_dir = 1
             def _animar():
                 if not self._update_win.winfo_exists():
                     return
-                self._anim_val += 0.03 * self._anim_dir
+                self._anim_val += 0.025 * self._anim_dir
                 if self._anim_val >= 1.0:
                     self._anim_dir = -1
                 elif self._anim_val <= 0.0:
@@ -277,21 +301,26 @@ class WelcomeXApp(ctk.CTk):
                 self._update_win.after(30, _animar)
             _animar()
 
-            # Tras 2s: marcar paso 3 listo y activar paso 4 antes de cerrar
             def _pre_restart():
+                if not self._update_win.winfo_exists():
+                    return
                 self._step_icons[2].configure(text="✅")
-                self._step_labels[2].configure(text="Instalación iniciada", text_color=COLORS["text"])
+                self._step_labels[2].configure(text="Instalación lista", text_color=COLORS["text"])
                 self._step_icons[3].configure(text="🔄")
                 self._step_labels[3].configure(text="Reiniciando WelcomeX...", text_color=COLORS["gold"])
+                self._update_detail.configure(text="La aplicación se cerrará y reabrirá automáticamente")
                 self.after(1500, lambda: self._launch_installer(installer_path))
 
-            self.after(2000, _pre_restart)
+            self.after(2200, _pre_restart)
         else:
             self._step_icons[1].configure(text="❌")
-            self._step_labels[1].configure(text="Error al descargar. Reintentando al próximo inicio.",
-                                          text_color="#ef4444")
+            self._step_labels[1].configure(
+                text="Error al descargar. Se reintentará al próximo inicio.",
+                text_color="#ef4444")
             self._update_progress.configure(progress_color="#ef4444")
-            self.after(3000, lambda: self._update_win.destroy())
+            self._update_detail.configure(
+                text="Verificá tu conexión a internet.", text_color="#ef4444")
+            self.after(4000, lambda: self._update_win.destroy())
 
     def _launch_installer(self, installer_path):
         """Ejecuta el instalador en modo silencioso, luego relanza WelcomeX automáticamente"""

@@ -685,7 +685,7 @@ class PampaClient:
                     f.write(chunk)
                     downloaded += len(chunk)
                     if progress_callback and total > 0:
-                        progress_callback(downloaded / total)
+                        progress_callback(downloaded / total, downloaded, total)
             return True
         except Exception as e:
             print(f"[WelcomeX] Error descargando update: {e}")
