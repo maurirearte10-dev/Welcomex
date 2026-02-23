@@ -433,7 +433,7 @@ class KioscoWindow(ctk.CTkToplevel):
         video_personalizado = invitado.get('video_personalizado')
         video_mesa = None
 
-        if not video_personalizado and invitado.get('mesa'):
+        if not video_personalizado and invitado.get('mesa') and self.evento.get('usar_video_mesa', 1):
             video_mesa = db.obtener_video_por_mesa(self.evento['id'], invitado['mesa'])
 
         video_a_reproducir = video_personalizado or video_mesa

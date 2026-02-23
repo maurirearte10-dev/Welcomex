@@ -3003,27 +3003,32 @@ class WelcomeXApp(ctk.CTk):
                      anchor="w", font=("Arial", 11),
                      text_color=COLORS["text_light"]).pack(fill="x", pady=(2, 10))
 
-        # Botón configurar videos por mesa
-        ctk.CTkButton(scroll, text="🎬 Configurar Video de Mesa",
-                     command=lambda: self.configurar_videos_mesa(evento),
-                     height=50, font=("Arial", 14),
-                     fg_color=COLORS["primary"]).pack(fill="x", pady=(0, 10))
+        # ── Opción 1: Loop de Mesa ──
+        usar_video_mesa_var = ctk.BooleanVar(value=bool(evento.get('usar_video_mesa', 1)))
+        ctk.CTkCheckBox(scroll,
+                        text="🎬  Loop de Mesa  (reproduce el video asignado a la mesa)",
+                        variable=usar_video_mesa_var,
+                        font=("Arial", 13)).pack(anchor="w", pady=(0, 4))
 
-        # Checkbox splash de mesa
-        mostrar_bienvenida_var = ctk.BooleanVar(value=evento.get('mostrar_bienvenida', 1))
-        check_bienvenida = ctk.CTkCheckBox(scroll,
-                                           text="Mostrar Splash de Mesa (nombre + mesa en pantalla)",
-                                           variable=mostrar_bienvenida_var,
-                                           font=("Arial", 13))
-        check_bienvenida.pack(anchor="w", pady=(0, 4))
+        ctk.CTkButton(scroll, text="   Configurar videos por mesa",
+                      command=lambda: self.configurar_videos_mesa(evento),
+                      height=36, font=("Arial", 12),
+                      fg_color=COLORS["border"],
+                      text_color=COLORS["text_light"],
+                      anchor="w").pack(fill="x", padx=(24, 0), pady=(0, 10))
 
-        # Checkbox mostrar número de mesa en el splash
-        mostrar_mesa_var = ctk.BooleanVar(value=evento.get('mostrar_mesa', 1))
-        check_mesa = ctk.CTkCheckBox(scroll, text="Incluir número de mesa en el splash",
-                                     variable=mostrar_mesa_var,
-                                     font=("Arial", 12),
-                                     text_color=COLORS["text_light"])
-        check_mesa.pack(anchor="w", padx=(24, 0), pady=(0, 8))
+        # ── Opción 2: Splash de Mesa ──
+        mostrar_bienvenida_var = ctk.BooleanVar(value=bool(evento.get('mostrar_bienvenida', 1)))
+        ctk.CTkCheckBox(scroll,
+                        text="🟢  Splash de Mesa  (muestra nombre + mesa en pantalla)",
+                        variable=mostrar_bienvenida_var,
+                        font=("Arial", 13)).pack(anchor="w", pady=(0, 4))
+
+        mostrar_mesa_var = ctk.BooleanVar(value=bool(evento.get('mostrar_mesa', 1)))
+        ctk.CTkCheckBox(scroll, text="Incluir número de mesa en el splash",
+                        variable=mostrar_mesa_var,
+                        font=("Arial", 12),
+                        text_color=COLORS["text_light"]).pack(anchor="w", padx=(24, 0), pady=(0, 8))
         
         # Separador
         ctk.CTkFrame(scroll, height=2, fg_color=COLORS["border"]).pack(fill="x", pady=15)
@@ -3048,13 +3053,14 @@ class WelcomeXApp(ctk.CTk):
                     UPDATE eventos
                     SET nombre = ?, fecha_evento = ?, hora_inicio = ?,
                         hora_limite_acreditacion = ?, video_loop = ?, mostrar_mesa = ?,
-                        mostrar_bienvenida = ?
+                        mostrar_bienvenida = ?, usar_video_mesa = ?
                     WHERE id = ?
                 """, (nombre, fecha, hora,
                       e_limite.get().strip() if e_limite.get().strip() else None,
                       e_video.get().strip() if e_video.get().strip() else None,
                       1 if mostrar_mesa_var.get() else 0,
                       1 if mostrar_bienvenida_var.get() else 0,
+                      1 if usar_video_mesa_var.get() else 0,
                       evento['id']))
                 
                 db.connection.commit()
