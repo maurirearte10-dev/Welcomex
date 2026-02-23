@@ -391,11 +391,12 @@ class KioscoWindow(ctk.CTkToplevel):
             self.mostrar_overlay("❌ QR DE OTRO EVENTO", "#ef4444", 3000)
             return
 
-        # Verificar si ya está presente → repetir video/overlay
+        # Verificar si ya está presente → advertencia, NO repetir bienvenida
         if invitado.get('presente'):
-            print(f"[WARN] ⚠️ Ya acreditado — repitiendo presentación")
+            nombre = f"{invitado['nombre']} {invitado['apellido']}"
+            print(f"[WARN] ⚠️ Ya acreditado — mostrando aviso de duplicado")
             self._beep("repetir")
-            self._mostrar_acreditacion(invitado, repetir=True)
+            self.mostrar_overlay(f"⚠ YA INGRESO\n{nombre}", "#f59e0b", 3000)
             return
 
         # ACREDITAR
