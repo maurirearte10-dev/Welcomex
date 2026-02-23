@@ -331,14 +331,27 @@ class WelcomeXApp(ctk.CTk):
 
     def _launch_installer(self, installer_path):
         """Ejecuta el instalador en modo silencioso, luego relanza WelcomeX automáticamente"""
-        import subprocess, sys
+        import subprocess, sys, os, tempfile
         exe_path = sys.executable
-        try:
-            cmd = f'cmd /c "{installer_path}" /SILENT /CLOSEAPPLICATIONS && start "" "{exe_path}"'
-            subprocess.Popen(cmd, shell=True,
-                           creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW)
-        except Exception:
-            subprocess.Popen([installer_path])
+
+        # Bat temporal: instala silencioso y relanza WelcomeX sin mostrar ventana
+        bat_path = os.path.join(tempfile.gettempdir(), "welcomex_update.bat")
+        with open(bat_path, 'w') as f:
+            f.write('@echo off\n')
+            f.write(f'"{installer_path}" /VERYSILENT /CLOSEAPPLICATIONS\n')
+            f.write(f'start "" "{exe_path}"\n')
+            f.write('del "%~f0"\n')
+
+        # STARTUPINFO con SW_HIDE es más confiable que CREATE_NO_WINDOW para ocultar cmd
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0  # SW_HIDE
+
+        subprocess.Popen(
+            ['cmd', '/c', bat_path],
+            startupinfo=si,
+            creationflags=subprocess.DETACHED_PROCESS
+        )
         sys.exit(0)
 
     def mostrar_ventana_updates(self):
