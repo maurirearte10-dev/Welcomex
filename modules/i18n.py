@@ -37,12 +37,12 @@ def load_translations():
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 _translations[lang] = json.load(f)
-            print(f"[i18n] ✅ Cargado: {lang}.json")
+            print(f"[i18n] OK Cargado: {lang}.json")
         except FileNotFoundError:
-            print(f"[i18n] ⚠️ No encontrado: {filepath}")
+            print(f"[i18n] WARN No encontrado: {filepath}")
             _translations[lang] = {}
         except Exception as e:
-            print(f"[i18n] ❌ Error cargando {lang}: {e}")
+            print(f"[i18n] ERROR cargando {lang}: {e}")
             _translations[lang] = {}
 
 

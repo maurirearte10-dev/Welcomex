@@ -5804,24 +5804,27 @@ if __name__ == "__main__":
     
     # Crear ventana temporal invisible para el splash
     root = ctk.CTk()
-    root.withdraw()  # Ocultar ventana principal
-    
+    root.withdraw()
+    root.update_idletasks()  # Asegurar que el root esté inicializado
+
+    # Obtener dimensiones de pantalla desde el root ya inicializado
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+
     # Path del video splash (usar RESOURCE_DIR para compatibilidad con .exe)
     video_path = os.path.join(RESOURCE_DIR, "assets", "splash_intro.mp4")
-    
+
     def iniciar_app():
         """Callback para iniciar app después del splash"""
-        root.destroy()  # Destruir ventana temporal
+        root.destroy()
         app = WelcomeXApp()
         app.mainloop()
-    
+
     # Verificar si existe el video
     if os.path.exists(video_path):
-        # Mostrar splash screen
-        splash = SplashScreen(root, video_path, iniciar_app)
+        splash = SplashScreen(root, video_path, iniciar_app, screen_w=sw, screen_h=sh)
         root.mainloop()
     else:
-        # Si no hay video, iniciar directo
         print("[INFO] Video splash no encontrado, iniciando directo...")
         iniciar_app()
 
