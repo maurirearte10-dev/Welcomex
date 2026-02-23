@@ -127,6 +127,23 @@ class KioscoWindow(ctk.CTkToplevel):
         # Label para video
         self.video_label = ctk.CTkLabel(self.main_frame, text="")
         self.video_label.place(x=0, y=0, relwidth=1, relheight=1)
+
+        # Botón repetir — semi-oculto en esquina inferior derecha
+        # Casi invisible contra el fondo negro, pero tappeable por el operador
+        self.btn_repetir = ctk.CTkButton(
+            self.main_frame,
+            text="↺",
+            width=52, height=52,
+            corner_radius=26,
+            fg_color="transparent",
+            hover_color="#2a2a2e",
+            border_color="#2a2a2e",
+            border_width=1,
+            text_color="#3a3a3a",
+            font=("Segoe UI", 24),
+            command=self.repetir_ultima_acreditacion
+        )
+        self.btn_repetir.place(relx=0.99, rely=0.99, anchor="se")
         
         # Verificar si hay video
         self.video_path = evento.get('video_loop')
