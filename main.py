@@ -3799,15 +3799,15 @@ class WelcomeXApp(ctk.CTk):
         
         d = ctk.CTkToplevel(self)
         d.title("Importar desde Excel")
-        d.geometry("600x400")
+        d.geometry("600x480")
         d.transient(self)
         d.grab_set()
-        
+
         # Centrar
         d.update_idletasks()
         x = (d.winfo_screenwidth() // 2) - 300
-        y = (d.winfo_screenheight() // 2) - 200
-        d.geometry(f"600x400+{x}+{y}")
+        y = (d.winfo_screenheight() // 2) - 240
+        d.geometry(f"600x480+{x}+{y}")
         
         container = ctk.CTkFrame(d, fg_color=COLORS["bg"])
         container.pack(fill="both", expand=True, padx=35, pady=35)
