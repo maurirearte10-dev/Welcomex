@@ -3011,25 +3011,36 @@ class WelcomeXApp(ctk.CTk):
         ctk.CTkButton(video_frame, text="📁", command=seleccionar_video,
                      width=60, height=45, font=("Arial", 18)).pack(side="left", padx=5)
         
-        # Botón para configurar videos por mesa
-        ctk.CTkButton(scroll, text="🎬 Configurar Videos por Mesa",
-                     command=lambda: self.configurar_videos_mesa(evento),
-                     height=50, font=("Arial", 14), 
-                     fg_color=COLORS["primary"]).pack(fill="x", pady=(5, 20))
-        
-        # Checkbox mostrar mesa en overlay
-        mostrar_mesa_var = ctk.BooleanVar(value=evento.get('mostrar_mesa', 1))
-        check_mesa = ctk.CTkCheckBox(scroll, text="Mostrar mesa en overlay de acreditación",
-                                     variable=mostrar_mesa_var,
-                                     font=("Arial", 13))
-        check_mesa.pack(anchor="w", pady=(10, 0))
+        # ── Al acreditar ────────────────────────────────────────────
+        ctk.CTkFrame(scroll, height=2, fg_color=COLORS["border"]).pack(fill="x", pady=(0, 12))
+        ctk.CTkLabel(scroll, text="Al acreditar un invitado", anchor="w",
+                     font=("Arial", 13, "bold")).pack(fill="x")
+        ctk.CTkLabel(scroll,
+                     text="Podés activar uno, ambos o ninguno.",
+                     anchor="w", font=("Arial", 11),
+                     text_color=COLORS["text_light"]).pack(fill="x", pady=(2, 10))
 
-        # Checkbox mostrar cartel verde de bienvenida
+        # Botón configurar videos por mesa
+        ctk.CTkButton(scroll, text="🎬 Configurar Video de Mesa",
+                     command=lambda: self.configurar_videos_mesa(evento),
+                     height=50, font=("Arial", 14),
+                     fg_color=COLORS["primary"]).pack(fill="x", pady=(0, 10))
+
+        # Checkbox splash de mesa
         mostrar_bienvenida_var = ctk.BooleanVar(value=evento.get('mostrar_bienvenida', 1))
-        check_bienvenida = ctk.CTkCheckBox(scroll, text="Mostrar cartel de bienvenida al acreditar",
+        check_bienvenida = ctk.CTkCheckBox(scroll,
+                                           text="Mostrar Splash de Mesa (nombre + mesa en pantalla)",
                                            variable=mostrar_bienvenida_var,
                                            font=("Arial", 13))
-        check_bienvenida.pack(anchor="w", pady=(8, 0))
+        check_bienvenida.pack(anchor="w", pady=(0, 4))
+
+        # Checkbox mostrar número de mesa en el splash
+        mostrar_mesa_var = ctk.BooleanVar(value=evento.get('mostrar_mesa', 1))
+        check_mesa = ctk.CTkCheckBox(scroll, text="Incluir número de mesa en el splash",
+                                     variable=mostrar_mesa_var,
+                                     font=("Arial", 12),
+                                     text_color=COLORS["text_light"])
+        check_mesa.pack(anchor="w", padx=(24, 0), pady=(0, 8))
         
         # Separador
         ctk.CTkFrame(scroll, height=2, fg_color=COLORS["border"]).pack(fill="x", pady=15)
