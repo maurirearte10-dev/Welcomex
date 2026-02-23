@@ -296,30 +296,30 @@ class WelcomeXApp(ctk.CTk):
             self._step_labels[1].configure(text="OK   Descarga completa", fg="#ffffff")
             self._step_labels[2].configure(text="...  Instalando...",     fg="#f59e0b")
 
+            # Barra de instalación: llenado lineal 0→100% en ~2.5s, luego reinicia
             self._anim_val = 0.0
-            self._anim_dir = 1
-            def _animar():
-                if not self._update_win.winfo_exists():
-                    return
-                self._anim_val += 0.025 * self._anim_dir
-                if self._anim_val >= 1.0:
-                    self._anim_dir = -1
-                elif self._anim_val <= 0.0:
-                    self._anim_dir = 1
-                self._prog_set(self._anim_val)
-                self._update_win.after(30, _animar)
-            _animar()
 
             def _pre_restart():
                 if not self._update_win.winfo_exists():
                     return
+                self._prog_set(1.0)
                 self._step_labels[2].configure(text="OK   Instalacion lista",       fg="#ffffff")
                 self._step_labels[3].configure(text="...  Reiniciando WelcomeX...", fg="#f59e0b")
                 self._update_detail.configure(
                     text="La aplicacion se cerrara y reabrira automaticamente")
                 self.after(1500, lambda: self._launch_installer(installer_path))
 
-            self.after(2200, _pre_restart)
+            def _animar():
+                if not self._update_win.winfo_exists():
+                    return
+                self._anim_val += 0.012   # 0→1 en ~2.5s a 30ms/frame
+                if self._anim_val >= 1.0:
+                    _pre_restart()
+                    return
+                self._prog_set(self._anim_val)
+                self._update_win.after(30, _animar)
+
+            _animar()
         else:
             self._step_labels[1].configure(
                 text="X    Error al descargar. Se reintentara al proximo inicio.",
