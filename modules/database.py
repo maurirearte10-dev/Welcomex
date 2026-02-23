@@ -87,6 +87,7 @@ class DatabaseManager:
                 video_loop TEXT,
                 mesas_videos TEXT,
                 mostrar_mesa INTEGER DEFAULT 1,
+                mostrar_bienvenida INTEGER DEFAULT 1,
                 estado TEXT DEFAULT 'creado',
                 fecha_creacion TEXT NOT NULL,
                 FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
@@ -218,6 +219,12 @@ class DatabaseManager:
                 self.cursor.execute("ALTER TABLE eventos ADD COLUMN mostrar_mesa INTEGER DEFAULT 1")
                 self.connection.commit()
                 print("[MIGRACIÓN] ✅ Columna mostrar_mesa agregada")
+
+            if 'mostrar_bienvenida' not in columnas_eventos:
+                print("[MIGRACIÓN] Agregando columna mostrar_bienvenida...")
+                self.cursor.execute("ALTER TABLE eventos ADD COLUMN mostrar_bienvenida INTEGER DEFAULT 1")
+                self.connection.commit()
+                print("[MIGRACIÓN] ✅ Columna mostrar_bienvenida agregada")
         except Exception as e:
             print(f"[MIGRACIÓN] Error: {e}")
         

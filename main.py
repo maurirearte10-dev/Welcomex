@@ -2619,96 +2619,73 @@ class WelcomeXApp(ctk.CTk):
                         font=("Arial", 12),
                         text_color=COLORS["text_light"]).pack(side="left")
 
-        # Botones en 2 filas para que quepan en cualquier resolución
-        # Fila 1: acciones de ciclo de vida del evento
-        btn_row1 = ctk.CTkFrame(card, fg_color="transparent")
-        has_row1 = False
-        # Fila 2: gestión / navegación
-        btn_row2 = ctk.CTkFrame(card, fg_color="transparent")
-        has_row2 = False
+        # Todos los botones en una sola fila
+        btn_row = ctk.CTkFrame(card, fg_color="transparent")
 
-        # --- Fila 1: Ciclo de vida ---
         if evento['estado'] == 'creado':
             if self.tiene_permiso('iniciar_eventos'):
-                ctk.CTkButton(btn_row1, text="▶️ Iniciar", width=120, height=42,
+                ctk.CTkButton(btn_row, text="▶️ Iniciar", width=120, height=42,
                              font=("Arial", 13),
                              command=lambda e=evento: self.iniciar_evento(e)).pack(side="left", padx=4)
-                has_row1 = True
             if self.tiene_permiso('eliminar_eventos'):
-                ctk.CTkButton(btn_row1, text="🗑️ Borrar", width=120, height=42,
+                ctk.CTkButton(btn_row, text="🗑️ Borrar", width=120, height=42,
                              font=("Arial", 13), fg_color=COLORS["danger"],
                              command=lambda e=evento: self.eliminar_evento(e)).pack(side="left", padx=4)
-                has_row1 = True
 
         elif evento['estado'] == 'activo':
             if self.tiene_permiso('iniciar_eventos'):
-                ctk.CTkButton(btn_row1, text="⏸️ Pausar", width=120, height=42,
+                ctk.CTkButton(btn_row, text="⏸️ Pausar", width=120, height=42,
                              font=("Arial", 13),
                              command=lambda e=evento: self.pausar_evento(e)).pack(side="left", padx=4)
-                has_row1 = True
             if self.tiene_permiso('finalizar_eventos'):
-                ctk.CTkButton(btn_row1, text="⏹️ Finalizar", width=120, height=42,
+                ctk.CTkButton(btn_row, text="⏹️ Finalizar", width=120, height=42,
                              font=("Arial", 13), fg_color=COLORS["danger"],
                              command=lambda e=evento: self.finalizar_evento(e)).pack(side="left", padx=4)
-                has_row1 = True
 
         elif evento['estado'] == 'pausado':
             if self.tiene_permiso('iniciar_eventos'):
-                ctk.CTkButton(btn_row1, text="▶️ Reanudar", width=130, height=42,
+                ctk.CTkButton(btn_row, text="▶️ Reanudar", width=130, height=42,
                              font=("Arial", 13),
                              command=lambda e=evento: self.reanudar_evento(e)).pack(side="left", padx=4)
-                has_row1 = True
             if self.tiene_permiso('finalizar_eventos'):
-                ctk.CTkButton(btn_row1, text="⏹️ Finalizar", width=120, height=42,
+                ctk.CTkButton(btn_row, text="⏹️ Finalizar", width=120, height=42,
                              font=("Arial", 13), fg_color=COLORS["danger"],
                              command=lambda e=evento: self.finalizar_evento(e)).pack(side="left", padx=4)
-                has_row1 = True
             if self.tiene_permiso('eliminar_eventos'):
-                ctk.CTkButton(btn_row1, text="🗑️ Eliminar", width=120, height=42,
+                ctk.CTkButton(btn_row, text="🗑️ Eliminar", width=120, height=42,
                              font=("Arial", 13), fg_color="#7f1d1d",
                              command=lambda e=evento: self.eliminar_evento(e)).pack(side="left", padx=4)
-                has_row1 = True
 
         elif evento['estado'] == 'finalizado':
-            ctk.CTkButton(btn_row1, text="📊 Ver Reporte", width=140, height=42,
+            ctk.CTkButton(btn_row, text="📊 Ver Reporte", width=140, height=42,
                          font=("Arial", 13), fg_color=COLORS["primary"],
                          command=lambda e=evento: self.ver_reporte_evento(e)).pack(side="left", padx=4)
-            has_row1 = True
             if self.tiene_permiso('eliminar_eventos'):
-                ctk.CTkButton(btn_row1, text="🗑️ Eliminar", width=120, height=42,
+                ctk.CTkButton(btn_row, text="🗑️ Eliminar", width=120, height=42,
                              font=("Arial", 13), fg_color="#7f1d1d",
                              command=lambda e=evento: self.eliminar_evento(e)).pack(side="left", padx=4)
 
-        # --- Fila 2: Gestión ---
         if self.tiene_permiso('ver_invitados'):
-            ctk.CTkButton(btn_row2, text="👥 Invitados", width=130, height=42,
+            ctk.CTkButton(btn_row, text="👥 Invitados", width=130, height=42,
                          font=("Arial", 13),
                          command=lambda e=evento: self.ver_invitados(e)).pack(side="left", padx=4)
-            has_row2 = True
 
         if evento['estado'] == 'activo' and self.tiene_permiso('hacer_sorteos'):
-            ctk.CTkButton(btn_row2, text="🎲 Sorteos", width=120, height=42,
+            ctk.CTkButton(btn_row, text="🎲 Sorteos", width=120, height=42,
                          font=("Arial", 13),
                          command=lambda e=evento: self.ver_sorteos(e)).pack(side="left", padx=4)
-            has_row2 = True
 
         if evento['estado'] == 'activo' and self.tiene_permiso('abrir_kiosco'):
-            ctk.CTkButton(btn_row2, text="📱 Kiosco", width=120, height=42,
+            ctk.CTkButton(btn_row, text="📱 Kiosco", width=120, height=42,
                          font=("Arial", 13),
                          command=lambda e=evento: self.abrir_kiosco(e)).pack(side="left", padx=4)
-            has_row2 = True
 
         if evento['estado'] != 'finalizado' and self.tiene_permiso('crear_eventos') and not self.es_modo_demo():
-            ctk.CTkButton(btn_row2, text="✏️ Editar", width=110, height=42,
+            ctk.CTkButton(btn_row, text="✏️ Editar", width=110, height=42,
                          font=("Arial", 13),
                          command=lambda e=evento: self.editar_evento(e)).pack(side="left", padx=4)
-            has_row2 = True
 
-        # Empaquetar solo las filas que tienen botones
-        if has_row1:
-            btn_row1.pack(fill="x", padx=25, pady=(0, 5 if has_row2 else 20))
-        if has_row2:
-            btn_row2.pack(fill="x", padx=25, pady=(0, 20))
+        btn_row.pack(fill="x", padx=25, pady=(0, 20))
     
     def crear_evento(self):
         """Formulario crear evento"""
