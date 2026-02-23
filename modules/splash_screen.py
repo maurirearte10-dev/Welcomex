@@ -6,7 +6,7 @@ import cv2
 from PIL import Image, ImageTk
 import os
 
-MAX_SECONDS = 5   # duración máxima del splash
+MAX_SECONDS = 4   # duración máxima del splash
 
 
 class SplashScreen(tk.Toplevel):
