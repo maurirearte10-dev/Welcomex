@@ -6,7 +6,7 @@ import os
 import sys
 
 # Versión actual de la aplicación
-APP_VERSION = "1.3.3"
+APP_VERSION = "1.3.4"
 
 # Detectar si está corriendo como .exe empaquetado por PyInstaller
 def is_frozen():
@@ -51,6 +51,7 @@ COLORS = {
     "primary": "#3b82f6",         # Azul botones importantes
     "success": "#10b981",         # Verde
     "warning": "#f59e0b",         # Amarillo
+    "gold": "#f59e0b",            # Dorado (alias de warning)
     "danger": "#ef4444",          # Rojo
     "text": "#ffffff",            # Texto principal blanco
     "text_light": "#9ca3af",      # Texto secundario gris
