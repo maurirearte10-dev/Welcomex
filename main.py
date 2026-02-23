@@ -331,24 +331,30 @@ class WelcomeXApp(ctk.CTk):
 
     def _launch_installer(self, installer_path):
         """Ejecuta el instalador en modo silencioso, luego relanza WelcomeX automáticamente"""
-        import subprocess, sys
+        import subprocess, sys, os, tempfile
 
-        # sys.executable en PyInstaller apunta al .exe real (no al temp _MEI)
         exe_path = sys.executable
 
-        # PowerShell con -WindowStyle Hidden: sin ventana, sin flash de terminal.
-        # Start-Sleep 2 da tiempo a que el instalador limpie los archivos antes
-        # de relanzar el nuevo WelcomeX.exe
-        ps_cmd = (
-            f"Start-Process -FilePath '{installer_path}' "
-            f"-ArgumentList '/VERYSILENT','/CLOSEAPPLICATIONS' -Wait; "
-            f"Start-Sleep -Seconds 2; "
-            f"Start-Process -FilePath '{exe_path}'"
-        )
+        # Bat oculto: ping como delay confiable, instala, espera, relanza
+        bat_path = os.path.join(tempfile.gettempdir(), "welcomex_update.bat")
+        with open(bat_path, 'w') as f:
+            f.write('@echo off\n')
+            f.write('ping -n 4 127.0.0.1 >nul\n')          # ~3s: WelcomeX termina de cerrar
+            f.write(f'"{installer_path}" /VERYSILENT /CLOSEAPPLICATIONS\n')
+            f.write('ping -n 3 127.0.0.1 >nul\n')          # ~2s: instalador limpia archivos
+            f.write(f'start "" "{exe_path}"\n')
+            f.write('del "%~f0"\n')
+
+        # SW_HIDE + CREATE_NO_WINDOW + DETACHED: ventana completamente invisible
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0  # SW_HIDE
 
         subprocess.Popen(
-            ['powershell', '-WindowStyle', 'Hidden', '-NonInteractive', '-Command', ps_cmd],
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+            ['cmd', '/c', bat_path],
+            startupinfo=si,
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+            close_fds=True
         )
         sys.exit(0)
 
