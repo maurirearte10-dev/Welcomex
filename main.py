@@ -244,11 +244,13 @@ class WelcomeXApp(ctk.CTk):
         ctk.CTkLabel(warn_frame, text="⚠️  No cierres la aplicación durante la actualización",
                     font=("Segoe UI", 11), text_color="#f59e0b").pack(pady=8)
 
-        # Forzar render antes de arrancar el hilo
+        # Forzar render: withdraw+deiconify obliga a Windows a repintar todo el contenido
         self._update_win.update_idletasks()
+        self._update_win.withdraw()
+        self._update_win.deiconify()
         self._update_win.update()
 
-        # Iniciar descarga en hilo
+        # Iniciar descarga con delay para que el render termine antes del hilo
         dest = os.path.join(tempfile.gettempdir(), "WelcomeX_Setup.exe")
 
         def _progress(pct, downloaded, total):
@@ -259,7 +261,7 @@ class WelcomeXApp(ctk.CTk):
             ok = self.pampa.download_update(download_url, dest, progress_callback=_progress)
             self.after(0, lambda: self._update_finished(ok, dest))
 
-        threading.Thread(target=_download, daemon=True).start()
+        self._update_win.after(400, lambda: threading.Thread(target=_download, daemon=True).start())
 
     def _update_set_progress(self, pct, downloaded, total):
         """Actualiza barra de progreso con MB descargados"""
