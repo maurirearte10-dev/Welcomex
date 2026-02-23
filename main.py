@@ -176,81 +176,79 @@ class WelcomeXApp(ctk.CTk):
         self.after(800, lambda: self._start_download(version, download_url))
 
     def _start_download(self, version, download_url):
-        """Ventana prominente de actualización con progreso en tiempo real"""
+        """Ventana prominente de actualización con progreso en tiempo real.
+        Usa tk.Toplevel puro (no CTkToplevel) para evitar bugs de render en Windows."""
         import threading, tempfile, os
+        import tkinter as tk
 
-        self._update_win = ctk.CTkToplevel(self)
-        self._update_win.title(f"Actualizando WelcomeX a v{version}")
-        self._update_win.geometry("520x440")
-        self._update_win.resizable(False, False)
-        self._update_win.transient(self)
-        self._update_win.attributes('-topmost', True)   # Siempre al frente
-        self._update_win.protocol("WM_DELETE_WINDOW", lambda: None)  # No se puede cerrar
+        # tk.Toplevel renderiza confiablemente en Windows (CTkToplevel tiene bugs de paint)
+        win = tk.Toplevel(self)
+        self._update_win = win
+        win.title(f"Actualizando WelcomeX a v{version}")
+        win.configure(bg="#1a1a2e")
+        win.resizable(False, False)
+        win.protocol("WM_DELETE_WINDOW", lambda: None)  # No se puede cerrar
+        win.attributes('-topmost', True)
 
-        x = (self._update_win.winfo_screenwidth() - 520) // 2
-        y = (self._update_win.winfo_screenheight() - 440) // 2
-        self._update_win.geometry(f"+{x}+{y}")
-        self._update_win.lift()
-        self._update_win.focus_force()
+        # Centrar
+        W, H = 520, 390
+        win.update_idletasks()
+        x = (win.winfo_screenwidth()  - W) // 2
+        y = (win.winfo_screenheight() - H) // 2
+        win.geometry(f"{W}x{H}+{x}+{y}")
 
-        frame = ctk.CTkFrame(self._update_win, fg_color=COLORS["card"])
-        frame.pack(expand=True, fill="both", padx=24, pady=24)
+        # Frame principal
+        main = tk.Frame(win, bg="#2b2b3c", padx=24, pady=16)
+        main.pack(expand=True, fill="both", padx=16, pady=16)
 
         # Título
-        ctk.CTkLabel(frame, text="⬆️  Actualización disponible",
-                    font=("Segoe UI", 19, "bold"),
-                    text_color=COLORS["gold"]).pack(pady=(10, 4))
-        ctk.CTkLabel(frame, text=f"Instalando versión {version}",
-                    font=("Segoe UI", 13),
-                    text_color=COLORS["text_light"]).pack(pady=(0, 18))
+        tk.Label(main, text="Actualizando WelcomeX",
+                 font=("Segoe UI", 18, "bold"), fg="#f59e0b", bg="#2b2b3c").pack(pady=(4, 2))
+        tk.Label(main, text=f"Instalando version {version}",
+                 font=("Segoe UI", 12), fg="#9ca3af", bg="#2b2b3c").pack(pady=(0, 12))
 
         # Pasos
-        steps_data = [
-            ("✅", "Nueva versión detectada",      COLORS["text"]),
-            ("🔄", "Descargando actualización...", COLORS["gold"]),
-            ("⏳", "Instalando",                   COLORS["text_light"]),
-            ("⏳", "Reiniciando WelcomeX",          COLORS["text_light"]),
+        steps_txt = [
+            "OK   Nueva version detectada",
+            "...  Descargando actualizacion...",
+            "...  Instalando",
+            "...  Reiniciando WelcomeX",
         ]
-        self._step_icons  = []
         self._step_labels = []
-        steps_frame = ctk.CTkFrame(frame, fg_color=COLORS["bg"], corner_radius=8)
-        steps_frame.pack(fill="x", padx=4, pady=(0, 16))
+        steps_bg = tk.Frame(main, bg="#0f0f0f", padx=12, pady=6)
+        steps_bg.pack(fill="x", pady=(0, 10))
+        for s in steps_txt:
+            lbl = tk.Label(steps_bg, text=s, font=("Segoe UI", 12),
+                           fg="#9ca3af", bg="#0f0f0f", anchor="w")
+            lbl.pack(fill="x", pady=3)
+            self._step_labels.append(lbl)
+        # Primer paso ya listo
+        self._step_labels[0].configure(fg="#ffffff",
+            text="OK   Nueva version detectada")
 
-        for icon, text, color in steps_data:
-            row = ctk.CTkFrame(steps_frame, fg_color="transparent")
-            row.pack(fill="x", padx=14, pady=6)
-            icon_lbl = ctk.CTkLabel(row, text=icon, font=("Segoe UI", 16), width=28)
-            icon_lbl.pack(side="left")
-            text_lbl = ctk.CTkLabel(row, text=text, font=("Segoe UI", 13),
-                                   text_color=color, anchor="w")
-            text_lbl.pack(side="left", padx=(10, 0))
-            self._step_icons.append(icon_lbl)
-            self._step_labels.append(text_lbl)
+        # Barra de progreso (Canvas)
+        prog_outer = tk.Frame(main, bg="#374151", height=14)
+        prog_outer.pack(fill="x", pady=(0, 6))
+        prog_outer.pack_propagate(False)
+        self._prog_canvas = tk.Canvas(prog_outer, height=14, bg="#374151",
+                                      highlightthickness=0, bd=0)
+        self._prog_canvas.pack(fill="both", expand=True)
+        self._prog_rect = self._prog_canvas.create_rectangle(
+            0, 0, 0, 14, fill="#f59e0b", outline="")
 
-        # Barra de progreso
-        self._update_progress = ctk.CTkProgressBar(frame, height=14,
-                    progress_color=COLORS["gold"], corner_radius=7)
-        self._update_progress.pack(fill="x", padx=4, pady=(0, 6))
-        self._update_progress.set(0)
-
-        # Texto de progreso detallado
-        self._update_detail = ctk.CTkLabel(frame, text="Iniciando descarga...",
-                    font=("Segoe UI", 12), text_color=COLORS["text_light"])
-        self._update_detail.pack(pady=(0, 10))
+        # Detalle
+        self._update_detail = tk.Label(main, text="Iniciando descarga...",
+                                       font=("Segoe UI", 11), fg="#9ca3af", bg="#2b2b3c")
+        self._update_detail.pack(pady=(0, 8))
 
         # Advertencia
-        warn_frame = ctk.CTkFrame(frame, fg_color="#2d1b00", corner_radius=8)
-        warn_frame.pack(fill="x", padx=4, pady=(4, 0))
-        ctk.CTkLabel(warn_frame, text="⚠️  No cierres la aplicación durante la actualización",
-                    font=("Segoe UI", 11), text_color="#f59e0b").pack(pady=8)
+        warn = tk.Frame(main, bg="#2d1b00", padx=10, pady=6)
+        warn.pack(fill="x")
+        tk.Label(warn, text="No cierres la aplicacion durante la actualizacion",
+                 font=("Segoe UI", 10), fg="#f59e0b", bg="#2d1b00").pack()
 
-        # Forzar render: withdraw+deiconify obliga a Windows a repintar todo el contenido
-        self._update_win.update_idletasks()
-        self._update_win.withdraw()
-        self._update_win.deiconify()
-        self._update_win.update()
+        win.update()
 
-        # Iniciar descarga con delay para que el render termine antes del hilo
         dest = os.path.join(tempfile.gettempdir(), "WelcomeX_Setup.exe")
 
         def _progress(pct, downloaded, total):
@@ -261,13 +259,23 @@ class WelcomeXApp(ctk.CTk):
             ok = self.pampa.download_update(download_url, dest, progress_callback=_progress)
             self.after(0, lambda: self._update_finished(ok, dest))
 
-        self._update_win.after(400, lambda: threading.Thread(target=_download, daemon=True).start())
+        win.after(300, lambda: threading.Thread(target=_download, daemon=True).start())
+
+    def _prog_set(self, pct, color="#f59e0b"):
+        """Actualiza el canvas de progreso (0.0 - 1.0)"""
+        if not hasattr(self, '_prog_canvas') or not self._prog_canvas.winfo_exists():
+            return
+        w = self._prog_canvas.winfo_width()
+        if w < 2:
+            w = 480
+        self._prog_canvas.coords(self._prog_rect, 0, 0, int(w * pct), 14)
+        self._prog_canvas.itemconfig(self._prog_rect, fill=color)
 
     def _update_set_progress(self, pct, downloaded, total):
         """Actualiza barra de progreso con MB descargados"""
         if not hasattr(self, '_update_win') or not self._update_win.winfo_exists():
             return
-        self._update_progress.set(pct)
+        self._prog_set(pct)
         mb_down  = downloaded / 1_048_576
         mb_total = total      / 1_048_576
         pct_int  = int(pct * 100)
@@ -283,15 +291,10 @@ class WelcomeXApp(ctk.CTk):
         if not hasattr(self, '_update_win') or not self._update_win.winfo_exists():
             return
         if ok:
-            self._update_progress.set(1)
-            self._update_detail.configure(text="Descarga completa ✅")
-
-            self._step_icons[1].configure(text="✅")
-            self._step_labels[1].configure(text="Descarga completa", text_color=COLORS["text"])
-
-            # Paso 3: instalando (barra animada)
-            self._step_icons[2].configure(text="🔄")
-            self._step_labels[2].configure(text="Instalando...", text_color=COLORS["gold"])
+            self._prog_set(1.0)
+            self._update_detail.configure(text="Descarga completa")
+            self._step_labels[1].configure(text="OK   Descarga completa", fg="#ffffff")
+            self._step_labels[2].configure(text="...  Instalando...",     fg="#f59e0b")
 
             self._anim_val = 0.0
             self._anim_dir = 1
@@ -303,29 +306,27 @@ class WelcomeXApp(ctk.CTk):
                     self._anim_dir = -1
                 elif self._anim_val <= 0.0:
                     self._anim_dir = 1
-                self._update_progress.set(self._anim_val)
+                self._prog_set(self._anim_val)
                 self._update_win.after(30, _animar)
             _animar()
 
             def _pre_restart():
                 if not self._update_win.winfo_exists():
                     return
-                self._step_icons[2].configure(text="✅")
-                self._step_labels[2].configure(text="Instalación lista", text_color=COLORS["text"])
-                self._step_icons[3].configure(text="🔄")
-                self._step_labels[3].configure(text="Reiniciando WelcomeX...", text_color=COLORS["gold"])
-                self._update_detail.configure(text="La aplicación se cerrará y reabrirá automáticamente")
+                self._step_labels[2].configure(text="OK   Instalacion lista",       fg="#ffffff")
+                self._step_labels[3].configure(text="...  Reiniciando WelcomeX...", fg="#f59e0b")
+                self._update_detail.configure(
+                    text="La aplicacion se cerrara y reabrira automaticamente")
                 self.after(1500, lambda: self._launch_installer(installer_path))
 
             self.after(2200, _pre_restart)
         else:
-            self._step_icons[1].configure(text="❌")
             self._step_labels[1].configure(
-                text="Error al descargar. Se reintentará al próximo inicio.",
-                text_color="#ef4444")
-            self._update_progress.configure(progress_color="#ef4444")
+                text="X    Error al descargar. Se reintentara al proximo inicio.",
+                fg="#ef4444")
+            self._prog_set(1.0, color="#ef4444")
             self._update_detail.configure(
-                text="Verificá tu conexión a internet.", text_color="#ef4444")
+                text="Verica tu conexion a internet.", fg="#ef4444")
             self.after(4000, lambda: self._update_win.destroy())
 
     def _launch_installer(self, installer_path):
