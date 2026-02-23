@@ -244,6 +244,10 @@ class WelcomeXApp(ctk.CTk):
         ctk.CTkLabel(warn_frame, text="⚠️  No cierres la aplicación durante la actualización",
                     font=("Segoe UI", 11), text_color="#f59e0b").pack(pady=8)
 
+        # Forzar render antes de arrancar el hilo
+        self._update_win.update_idletasks()
+        self._update_win.update()
+
         # Iniciar descarga en hilo
         dest = os.path.join(tempfile.gettempdir(), "WelcomeX_Setup.exe")
 
