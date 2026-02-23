@@ -2666,11 +2666,14 @@ class WelcomeXApp(ctk.CTk):
                 has_row1 = True
 
         elif evento['estado'] == 'finalizado':
+            ctk.CTkButton(btn_row1, text="📊 Ver Reporte", width=140, height=42,
+                         font=("Arial", 13), fg_color=COLORS["primary"],
+                         command=lambda e=evento: self.ver_reporte_evento(e)).pack(side="left", padx=4)
+            has_row1 = True
             if self.tiene_permiso('eliminar_eventos'):
                 ctk.CTkButton(btn_row1, text="🗑️ Eliminar", width=120, height=42,
                              font=("Arial", 13), fg_color="#7f1d1d",
                              command=lambda e=evento: self.eliminar_evento(e)).pack(side="left", padx=4)
-                has_row1 = True
 
         # --- Fila 2: Gestión ---
         if self.tiene_permiso('ver_invitados'):
@@ -2911,21 +2914,12 @@ class WelcomeXApp(ctk.CTk):
                     font=("Arial", 13), text_color=COLORS["text_light"],
                     justify="center").pack(pady=20)
         
-        # Checkbox exportar
-        var_exportar = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(d, text="Exportar datos a Excel", variable=var_exportar,
-                       font=("Arial", 13)).pack(pady=15)
-        
         def confirmar():
             db.cambiar_estado_evento(evento['id'], "finalizado", self.usuario_actual['id'])
-            
-            if var_exportar.get():
-                # TODO: Exportar datos
-                pass
-            
             d.destroy()
-            self.mostrar_mensaje("Éxito", "Evento finalizado correctamente", "success")
             self.mostrar_eventos()
+            # Abrir reporte automáticamente al finalizar
+            self.after(300, lambda: self.ver_reporte_evento(evento))
         
         btn_frame = ctk.CTkFrame(d, fg_color="transparent")
         btn_frame.pack(pady=20)
@@ -2938,6 +2932,14 @@ class WelcomeXApp(ctk.CTk):
                      fg_color="transparent", border_width=2, 
                      border_color=COLORS["border"]).pack(side="left", padx=8)
     
+    def ver_reporte_evento(self, evento):
+        """Abrir ventana de reporte post-evento"""
+        from modules.reporte_evento import ReporteEvento
+        try:
+            ReporteEvento(self, evento)
+        except Exception as e:
+            self.mostrar_mensaje("Error", f"No se pudo abrir el reporte:\n{str(e)}", "error")
+
     def editar_evento(self, evento):
         """Formulario editar evento"""
         if not self.validar_accion_escritura("editar eventos"):
