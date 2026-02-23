@@ -4107,15 +4107,21 @@ class WelcomeXApp(ctk.CTk):
     # ============================================
     
     def abrir_kiosco(self, evento):
-        """Abrir kiosco - SIEMPRE 1 horizontal directo"""
+        """Abrir kiosco + panel de operador"""
         from modules.kiosco_ui import KioscoWindow
-        
-        # FORZAR: 1 kiosco, horizontal, sin preguntar
+        from modules.operator_panel import OperatorPanel
+
         orientacion = 'horizontal'
-        
-        # Abrir directo
+
         try:
             kiosco = KioscoWindow(self, evento, orientacion, kiosco_id=1)
+
+            # Panel de operador (ventana secundaria, siempre al frente)
+            try:
+                OperatorPanel(self, evento, kiosco_window=kiosco)
+            except Exception as pe:
+                print(f"[OperatorPanel] No se pudo abrir: {pe}")
+
             kiosco.mainloop()
         except Exception as e:
             print(f"Error abriendo kiosco: {e}")
