@@ -144,7 +144,23 @@ class KioscoWindow(ctk.CTkToplevel):
             command=self.repetir_ultima_acreditacion
         )
         self.btn_repetir.place(relx=0.99, rely=0.99, anchor="se")
-        
+
+        # Botón salir kiosco — semi-oculto en esquina inferior izquierda
+        self.btn_salir = ctk.CTkButton(
+            self.main_frame,
+            text="✕",
+            width=52, height=52,
+            corner_radius=26,
+            fg_color="transparent",
+            hover_color="#2a2a2e",
+            border_color="#2a2a2e",
+            border_width=1,
+            text_color="#3a3a3a",
+            font=("Segoe UI", 24),
+            command=self.destroy
+        )
+        self.btn_salir.place(relx=0.01, rely=0.99, anchor="sw")
+
         # Verificar si hay video
         self.video_path = evento.get('video_loop')
         
@@ -432,7 +448,9 @@ class KioscoWindow(ctk.CTkToplevel):
         print(f"[FIN] Proceso completado\n")
 
     def _beep(self, tipo):
-        """Sonido sutil de sistema según el resultado"""
+        """Sonido sutil de sistema según el resultado (respeta usar_sonido del evento)"""
+        if not self.evento.get('usar_sonido', 1):
+            return
         try:
             import winsound
             if tipo == "ok":

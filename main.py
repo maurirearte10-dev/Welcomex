@@ -3049,7 +3049,14 @@ class WelcomeXApp(ctk.CTk):
                         variable=mostrar_mesa_var,
                         font=("Arial", 12),
                         text_color=COLORS["text_light"]).pack(anchor="w", padx=(24, 0), pady=(0, 8))
-        
+
+        # ── Opción 3: Sonido ──
+        usar_sonido_var = ctk.BooleanVar(value=bool(evento.get('usar_sonido', 1)))
+        ctk.CTkCheckBox(scroll,
+                        text="🔔  Sonido al acreditar  (beep de confirmación)",
+                        variable=usar_sonido_var,
+                        font=("Arial", 13)).pack(anchor="w", pady=(0, 8))
+
         # Separador
         ctk.CTkFrame(scroll, height=2, fg_color=COLORS["border"]).pack(fill="x", pady=15)
         
@@ -3073,7 +3080,7 @@ class WelcomeXApp(ctk.CTk):
                     UPDATE eventos
                     SET nombre = ?, fecha_evento = ?, hora_inicio = ?,
                         hora_limite_acreditacion = ?, video_loop = ?, mostrar_mesa = ?,
-                        mostrar_bienvenida = ?, usar_video_mesa = ?
+                        mostrar_bienvenida = ?, usar_video_mesa = ?, usar_sonido = ?
                     WHERE id = ?
                 """, (nombre, fecha, hora,
                       e_limite.get().strip() if e_limite.get().strip() else None,
@@ -3081,6 +3088,7 @@ class WelcomeXApp(ctk.CTk):
                       1 if mostrar_mesa_var.get() else 0,
                       1 if mostrar_bienvenida_var.get() else 0,
                       1 if usar_video_mesa_var.get() else 0,
+                      1 if usar_sonido_var.get() else 0,
                       evento['id']))
                 
                 db.connection.commit()

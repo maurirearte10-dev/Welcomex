@@ -232,6 +232,12 @@ class DatabaseManager:
                 self.cursor.execute("ALTER TABLE eventos ADD COLUMN usar_video_mesa INTEGER DEFAULT 1")
                 self.connection.commit()
                 print("[MIGRACIÓN] ✅ Columna usar_video_mesa agregada")
+
+            if 'usar_sonido' not in columnas_eventos:
+                print("[MIGRACIÓN] Agregando columna usar_sonido...")
+                self.cursor.execute("ALTER TABLE eventos ADD COLUMN usar_sonido INTEGER DEFAULT 1")
+                self.connection.commit()
+                print("[MIGRACIÓN] ✅ Columna usar_sonido agregada")
         except Exception as e:
             print(f"[MIGRACIÓN] Error: {e}")
         
