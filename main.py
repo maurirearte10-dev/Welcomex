@@ -330,31 +330,26 @@ class WelcomeXApp(ctk.CTk):
             self.after(4000, lambda: self._update_win.destroy())
 
     def _launch_installer(self, installer_path):
-        """Ejecuta el instalador en modo silencioso, luego relanza WelcomeX automáticamente"""
+        """Ejecuta el instalador en modo silencioso, luego relanza WelcomeX automáticamente.
+        Usa VBScript con WScript.Shell.Run(windowStyle=0) — completamente sin ventana."""
         import subprocess, sys, os, tempfile
 
         exe_path = sys.executable
 
-        # Bat oculto: ping como delay confiable, instala, espera, relanza
-        bat_path = os.path.join(tempfile.gettempdir(), "welcomex_update.bat")
-        with open(bat_path, 'w') as f:
-            f.write('@echo off\n')
-            f.write('ping -n 4 127.0.0.1 >nul\n')          # ~3s: WelcomeX termina de cerrar
-            f.write(f'"{installer_path}" /VERYSILENT /CLOSEAPPLICATIONS\n')
-            f.write('ping -n 3 127.0.0.1 >nul\n')          # ~2s: instalador limpia archivos
-            f.write(f'start "" "{exe_path}"\n')
-            f.write('del "%~f0"\n')
-
-        # SW_HIDE + CREATE_NO_WINDOW + DETACHED: ventana completamente invisible
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = 0  # SW_HIDE
+        # VBScript: windowStyle=0 garantiza ejecución totalmente oculta en Windows.
+        # bWaitOnReturn=True en el instalador asegura que el relanzamiento ocurre
+        # recién cuando la instalación terminó.
+        vbs_path = os.path.join(tempfile.gettempdir(), "welcomex_update.vbs")
+        with open(vbs_path, 'w') as f:
+            f.write('WScript.Sleep 3000\n')
+            f.write('Dim sh : Set sh = CreateObject("WScript.Shell")\n')
+            f.write(f'sh.Run Chr(34) & "{installer_path}" & Chr(34) & " /VERYSILENT /CLOSEAPPLICATIONS", 0, True\n')
+            f.write('WScript.Sleep 2000\n')
+            f.write(f'sh.Run Chr(34) & "{exe_path}" & Chr(34), 1, False\n')
 
         subprocess.Popen(
-            ['cmd', '/c', bat_path],
-            startupinfo=si,
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
-            close_fds=True
+            ['wscript', '//Nologo', vbs_path],
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
         )
         sys.exit(0)
 
