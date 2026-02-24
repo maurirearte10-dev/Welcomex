@@ -5834,9 +5834,20 @@ if __name__ == "__main__":
 
     def iniciar_app():
         """Callback para iniciar app después del splash"""
-        root.destroy()
-        app = WelcomeXApp()
-        app.mainloop()
+        try:
+            root.destroy()
+            app = WelcomeXApp()
+            app.mainloop()
+        except Exception as e:
+            import traceback, tkinter as tk, tkinter.messagebox as mb
+            log_path = os.path.join(os.path.expanduser("~"), "welcomex_error.log")
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write(traceback.format_exc())
+            r = tk.Tk()
+            r.withdraw()
+            mb.showerror("Error al iniciar WelcomeX",
+                         f"{e}\n\nDetalle guardado en:\n{log_path}")
+            r.destroy()
 
     # Verificar si existe el video
     if os.path.exists(video_path):
