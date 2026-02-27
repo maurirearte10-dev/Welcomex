@@ -115,7 +115,8 @@ class KioscoWindow(ctk.CTkToplevel):
         self.bind('<F11>', lambda e: self.toggle_fullscreen())
         self.bind('<Escape>', lambda e: self.cerrar_directo())
         self.bind('<F5>', lambda e: self.repetir_ultima_acreditacion())
-        self.bind('<Key>', self.capturar_tecla)
+        # NOTA: NO bindear <Key> aquí — pynput ya captura todo globalmente.
+        # Tener ambos activos duplica cada carácter en qr_buffer y rompe la búsqueda.
         
         # FIX: Variable para prevenir recursión
         self._fix_in_progress = False
