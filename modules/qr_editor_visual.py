@@ -189,7 +189,7 @@ class QREditorVisual(ctk.CTkToplevel):
         
         ctk.CTkButton(btn_frame, text="✅ Confirmar Posición",
                      command=self.confirmar,
-                     height=50, font=("Arial", 15, "bold"),
+                     height=65, font=("Arial", 15, "bold"),
                      fg_color="#10b981").pack(fill="x", pady=(0, 10))
         
         ctk.CTkButton(btn_frame, text="Cancelar",

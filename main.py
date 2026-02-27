@@ -875,24 +875,25 @@ class WelcomeXApp(ctk.CTk):
         """Mostrar mensaje en ventana emergente"""
         d = ctk.CTkToplevel(self)
         d.title(titulo)
-        d.geometry("450x280")
         d.transient(self)
         d.grab_set()
         
-        # Centrar
-        d.update_idletasks()
-        x = (d.winfo_screenwidth() // 2) - 225
-        y = (d.winfo_screenheight() // 2) - 140
-        d.geometry(f"450x280+{x}+{y}")
-        
         icon = "✅" if tipo == "success" else "❌" if tipo == "error" else "ℹ️" if tipo == "info" else "⚠️"
-        
+
         ctk.CTkLabel(d, text=icon, font=("Arial", 50)).pack(pady=(30, 10))
         ctk.CTkLabel(d, text=titulo, font=("Arial", 20, "bold")).pack(pady=5)
-        ctk.CTkLabel(d, text=mensaje, wraplength=380, font=("Arial", 13), 
+        ctk.CTkLabel(d, text=mensaje, wraplength=380, font=("Arial", 13),
                     justify="center").pack(pady=20)
         ctk.CTkButton(d, text="OK", command=d.destroy, width=140, height=45,
                      font=("Arial", 14)).pack(pady=15)
+
+        # Centrar con tamaño real después de dibujar widgets
+        d.update_idletasks()
+        w = max(d.winfo_reqwidth(), 450)
+        h = d.winfo_reqheight()
+        x = (d.winfo_screenwidth() // 2) - (w // 2)
+        y = (d.winfo_screenheight() // 2) - (h // 2)
+        d.geometry(f"{w}x{h}+{x}+{y}")
     
     # ============================================
     # LOGIN

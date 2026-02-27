@@ -100,23 +100,20 @@ class KioscoWindow(ctk.CTkToplevel):
         self.vlc_player = None
         self.vlc_media = None
         
-        # Iniciar listener global SIEMPRE
+        # Iniciar listener global SIEMPRE con suppress=True
+        # suppress=True evita que Windows entregue la tecla al window activo,
+        # eliminando cualquier riesgo de doble procesamiento.
         try:
             self.keyboard_listener = keyboard.Listener(
                 on_press=self.on_key_press_global,
-                suppress=False  # No suprimir teclas
+                suppress=True
             )
             self.keyboard_listener.start()
-            print(f"[KIOSCO {kiosco_id}] ✅ Listener global activado")
+            print(f"[KIOSCO {kiosco_id}] ✅ Listener global activado (suppress=True)")
         except Exception as e:
             print(f"[KIOSCO {kiosco_id}] ⚠️ Error iniciando listener: {e}")
-        
-        # Bindings locales (cuando tiene foco)
-        self.bind('<F11>', lambda e: self.toggle_fullscreen())
-        self.bind('<Escape>', lambda e: self.cerrar_directo())
-        self.bind('<F5>', lambda e: self.repetir_ultima_acreditacion())
-        # NOTA: NO bindear <Key> aquí — pynput ya captura todo globalmente.
-        # Tener ambos activos duplica cada carácter en qr_buffer y rompe la búsqueda.
+
+        # F11 y Escape se manejan en on_key_press_global (suppress=True bloquea tkinter bindings)
         
         # FIX: Variable para prevenir recursión
         self._fix_in_progress = False
@@ -864,17 +861,23 @@ class KioscoWindow(ctk.CTkToplevel):
             self.overlay.destroy()
     
     def on_key_press_global(self, key):
-        """Captura global de teclado - SIEMPRE activa"""
+        """Captura global de teclado - SIEMPRE activa (suppress=True)"""
         try:
+            # Teclas especiales
+            if key == keyboard.Key.f11:
+                self.after(0, self.toggle_fullscreen)
+                return
+            elif key == keyboard.Key.esc:
+                self.after(0, self.cerrar_directo)
+                return
+            elif key == keyboard.Key.f5:
+                self.after(0, self.repetir_ultima_acreditacion)
+                return
+
             # Capturar carácter
             if hasattr(key, 'char') and key.char and key.char.isprintable():
                 self.qr_buffer += key.char
                 print(f"[📝] '{key.char}' → {self.qr_buffer}")
-                
-            # F5 → repetir última acreditación
-            elif key == keyboard.Key.f5:
-                self.after(0, self.repetir_ultima_acreditacion)
-                return
 
             # Si es Enter, procesar QR
             elif key == keyboard.Key.enter:
