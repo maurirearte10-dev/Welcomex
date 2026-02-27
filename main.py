@@ -69,10 +69,14 @@ class _DPIAwareToplevel(ctk.CTkToplevel):
                 w, h = int(m.group(1)), int(m.group(2))
                 sw = int(w * s)
                 sh = int(h * s)
-                # Limitar al espacio disponible en pantalla
+                # Solo recortar si REALMENTE se pasa de la pantalla (40px margen ancho, 80px para taskbar+bordes)
                 try:
-                    sw = min(sw, int(self.winfo_screenwidth()  * 0.92))
-                    sh = min(sh, int(self.winfo_screenheight() * 0.88))
+                    max_w = self.winfo_screenwidth()  - 40
+                    max_h = self.winfo_screenheight() - 80
+                    if sw > max_w:
+                        sw = max_w
+                    if sh > max_h:
+                        sh = max_h
                 except Exception:
                     pass
                 self._dpi_orig_w = sw
@@ -93,8 +97,12 @@ class _DPIAwareToplevel(ctk.CTkToplevel):
                 sw = int(w * s)
                 sh = int(h * s)
                 try:
-                    sw = min(sw, int(self.winfo_screenwidth()  * 0.92))
-                    sh = min(sh, int(self.winfo_screenheight() * 0.88))
+                    max_w = self.winfo_screenwidth()  - 40
+                    max_h = self.winfo_screenheight() - 80
+                    if sw > max_w:
+                        sw = max_w
+                    if sh > max_h:
+                        sh = max_h
                 except Exception:
                     pass
                 x = (self.winfo_screenwidth()  - sw) // 2
@@ -248,8 +256,13 @@ class WelcomeXApp(ctk.CTk):
         threading.Thread(target=_check, daemon=True).start()
 
     def _auto_update(self):
-        """Muestra notificación y lanza la descarga automáticamente"""
+        """Muestra notificación y lanza la descarga automáticamente.
+        Si hay un evento activo, reintenta cada 10 minutos sin molestar al usuario."""
         if not self.update_info:
+            return
+        # No interrumpir un evento en curso — reintentar cuando termine
+        if getattr(self, 'evento_activo', None) is not None:
+            self.after(10 * 60 * 1000, self._auto_update)
             return
         version = self.update_info["latest_version"]
         download_url = self.update_info.get("download_url", "")
