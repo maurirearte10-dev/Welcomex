@@ -131,13 +131,21 @@ class KioscoWindow(ctk.CTkToplevel):
         self.video_label = ctk.CTkLabel(self.main_frame, text="")
         self.video_label.place(x=0, y=0, relwidth=1, relheight=1)
 
-        # Panel de control flotante con transparencia real (Toplevel + alpha).
-        # En estado oculto: 0 píxeles ocupados.
-        # En estado visible: overlay semi-transparente — el video se ve por detrás.
-        self._panel_win = None  # se crea lazy en _show_ctrl_panel
+        # Panel de control: tk.Frame dentro de main_frame para garantizar
+        # que aparezca por encima de VLC (que embebe su HWND en video_label).
+        # Un Toplevel separado con -topmost no puede superar a una ventana
+        # fullscreen+topmost en Windows 11. El Frame sí, con lift().
+        self._panel_win = None    # legacy (no usado)
+        self._ctrl_frame = None   # Frame real del panel
+        self._ctrl_buttons = []   # Lista de tk.Button para animación
+        self._fade_id = None      # ID del after() de animación activo
+        self._panel_visible = False  # Estado lógico (True = visible o mostrándose)
 
-        # Detectar movimiento de mouse para mostrar el panel al acercarse a la esquina
-        self.main_frame.bind("<Motion>", self._on_mouse_motion)
+        # Detectar mouse en esquina inferior derecha mediante polling.
+        # VLC embebe su propio window handle sobre video_label e intercepta
+        # todos los eventos de mouse, haciendo que <Motion> nunca se dispare.
+        # El polling con winfo_pointerx/y() funciona independientemente de VLC.
+        self.after(200, self._poll_mouse_corner)
 
         # Verificar si hay video
         self.video_path = evento.get('video_loop')
@@ -470,61 +478,157 @@ class KioscoWindow(ctk.CTkToplevel):
 
     # ── Panel de control ocultable ────────────────────────────────────────────
 
-    def _on_mouse_motion(self, event):
-        """Muestra el panel al acercarse a la esquina inferior derecha"""
-        w = self.main_frame.winfo_width()
-        h = self.main_frame.winfo_height()
-        if w < 2 or h < 2:
+    # ── Detección de esquina ─────────────────────────────────────────────────
+
+    def _poll_mouse_corner(self):
+        """Polling cada 150ms — detecta entrada/salida de la esquina inferior derecha.
+        Necesario porque VLC intercepta los eventos <Motion> de Tkinter."""
+        if not self.winfo_exists():
             return
-        zona = int(min(w, h) * 0.10)  # 10% del lado menor
-        if event.x > w - zona and event.y > h - zona:
-            self._show_ctrl_panel()
+        try:
+            sw = self.winfo_screenwidth()
+            sh = self.winfo_screenheight()
+            mx = self.winfo_pointerx()
+            my = self.winfo_pointery()
+            zona = int(min(sw, sh) * 0.12)  # ~130px en 1080p
+            in_zone = (mx > sw - zona) and (my > sh - zona)
 
-    def _create_panel_win(self):
-        """Crea el Toplevel flotante semi-transparente (lazy init)."""
+            if in_zone:
+                # Cancelar cualquier hide pendiente
+                if self._hide_panel_timer:
+                    self.after_cancel(self._hide_panel_timer)
+                    self._hide_panel_timer = None
+                if not self._panel_visible:
+                    self._show_ctrl_panel()
+            else:
+                # Mouse fuera de zona → programar fade-out si panel visible
+                if self._panel_visible and not self._hide_panel_timer:
+                    self._hide_panel_timer = self.after(400, self._hide_ctrl_panel)
+        except Exception:
+            pass
+        self.after(150, self._poll_mouse_corner)
+
+    def _on_mouse_motion(self, event):
+        """Fallback binding (no funciona con VLC activo)."""
+        pass
+
+    # ── Creación del panel ───────────────────────────────────────────────────
+
+    def _create_ctrl_frame(self):
+        """Crea el Frame de control dentro de main_frame (lazy init).
+        place+lift dentro del mismo contenedor supera el z-order de VLC."""
         import tkinter as tk
-        win = tk.Toplevel(self)
-        win.overrideredirect(True)          # sin barra de título
-        win.attributes('-topmost', True)
-        win.attributes('-alpha', 0.72)      # 72% opaco → video visible por detrás
-        win.configure(bg="#0a0a1e")
+        frame = tk.Frame(self.main_frame, bg="#000000", bd=0)
+        # Colores iniciales invisibles (se animan con fade-in)
+        _bs = dict(bg="#000000", fg="#000000", bd=0, relief="flat",
+                   font=("Segoe UI", 26), cursor="hand2",
+                   padx=16, pady=12,
+                   activebackground="#000000", activeforeground="#ffffff")
+        b1 = tk.Button(frame, text="↺", command=self.repetir_ultima_acreditacion, **_bs)
+        b2 = tk.Button(frame, text="⊟", command=self.minimizar_kiosco,            **_bs)
+        b3 = tk.Button(frame, text="✕", command=self.destroy,                     **_bs)
+        b1.pack(fill="x")
+        b2.pack(fill="x")
+        b3.pack(fill="x")
+        self._ctrl_buttons = [b1, b2, b3]
+        self._ctrl_frame = frame
 
-        _bs = dict(bg="#0a0a1e", fg="#9999cc", bd=0, relief="flat",
-                   font=("Segoe UI", 24), cursor="hand2",
-                   padx=14, pady=10,
-                   activebackground="#1a1a3a", activeforeground="#ffffff")
-        tk.Button(win, text="↺", command=self.repetir_ultima_acreditacion, **_bs).pack(fill="x")
-        tk.Button(win, text="⊟", command=self.minimizar_kiosco,            **_bs).pack(fill="x")
-        tk.Button(win, text="✕", command=self.destroy,                     **_bs).pack(fill="x")
+    # ── Animación fade ───────────────────────────────────────────────────────
 
-        win.bind("<Leave>", self._panel_mouse_leave)
-        win.withdraw()
-        self._panel_win = win
+    @staticmethod
+    def _lerp_color(c1, c2, t):
+        """Interpolación lineal entre dos colores hex."""
+        r1,g1,b1 = int(c1[1:3],16), int(c1[3:5],16), int(c1[5:7],16)
+        r2,g2,b2 = int(c2[1:3],16), int(c2[3:5],16), int(c2[5:7],16)
+        r = max(0, min(255, int(r1 + (r2-r1)*t)))
+        g = max(0, min(255, int(g1 + (g2-g1)*t)))
+        b = max(0, min(255, int(b1 + (b2-b1)*t)))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def _animate_fade(self, direction, step=0):
+        """Anima el fade del panel. direction='in' o 'out'. 10 pasos × 20ms = 200ms."""
+        self._fade_id = None
+        total = 10
+        if step > total:
+            if direction == 'out':
+                if self._ctrl_frame:
+                    self._ctrl_frame.place_forget()
+                self._panel_visible = False
+            return
+
+        t = step / total if direction == 'in' else 1.0 - step / total
+        bg_panel = self._lerp_color("#000000", "#0d0d2b", t)
+        fg_btn   = self._lerp_color("#000000", "#d0d0ff", t)
+        bg_hover = self._lerp_color("#000000", "#2a2a55", t)
+
+        try:
+            if self._ctrl_frame:
+                self._ctrl_frame.config(bg=bg_panel)
+            for btn in self._ctrl_buttons:
+                btn.config(bg=bg_panel, fg=fg_btn, activebackground=bg_hover)
+        except Exception:
+            return
+
+        self._fade_id = self.after(20, lambda: self._animate_fade(direction, step + 1))
+
+    # ── Mostrar / ocultar ────────────────────────────────────────────────────
 
     def _show_ctrl_panel(self):
-        if self._panel_win is None or not self._panel_win.winfo_exists():
-            self._create_panel_win()
+        if self._ctrl_frame is None:
+            self._create_ctrl_frame()
+
+        # Si ya está visible, solo cancela timer de hide
+        if self._panel_visible:
+            if self._hide_panel_timer:
+                self.after_cancel(self._hide_panel_timer)
+                self._hide_panel_timer = None
+            return
+
+        # Interrumpir fade-out si estaba en progreso
+        if self._fade_id:
+            self.after_cancel(self._fade_id)
+            self._fade_id = None
         if self._hide_panel_timer:
             self.after_cancel(self._hide_panel_timer)
             self._hide_panel_timer = None
-        # Posicionar en esquina inferior derecha de la pantalla
-        self._panel_win.update_idletasks()
-        sw = self.winfo_screenwidth()
-        sh = self.winfo_screenheight()
-        pw = self._panel_win.winfo_reqwidth()
-        ph = self._panel_win.winfo_reqheight()
-        self._panel_win.geometry(f"+{sw - pw - 12}+{sh - ph - 12}")
-        self._panel_win.deiconify()
-        self._panel_win.lift()
+
+        self._panel_visible = True
+
+        # Partir desde colores invisibles
+        try:
+            self._ctrl_frame.config(bg="#000000")
+            for btn in self._ctrl_buttons:
+                btn.config(bg="#000000", fg="#000000", activebackground="#000000")
+        except Exception:
+            pass
+
+        # Colocar y subir por encima de VLC
+        self._ctrl_frame.place(in_=self.main_frame,
+                               relx=1.0, rely=1.0, anchor="se",
+                               x=-12, y=-12)
+        self._ctrl_frame.lift()
+
+        # Iniciar fade-in
+        self._animate_fade('in')
 
     def _hide_ctrl_panel(self):
-        if self._panel_win and self._panel_win.winfo_exists():
-            self._panel_win.withdraw()
+        self._hide_panel_timer = None
+        if not self._panel_visible or self._ctrl_frame is None:
+            return
+
+        # Interrumpir fade-in si estaba en progreso
+        if self._fade_id:
+            self.after_cancel(self._fade_id)
+            self._fade_id = None
+
+        # Iniciar fade-out (al terminar llama place_forget y pone _panel_visible=False)
+        self._animate_fade('out')
 
     def _panel_mouse_leave(self, event):
+        """Por si acaso el mouse sale del frame directamente."""
         if self._hide_panel_timer:
             self.after_cancel(self._hide_panel_timer)
-        self._hide_panel_timer = self.after(2000, self._hide_ctrl_panel)
+        self._hide_panel_timer = self.after(400, self._hide_ctrl_panel)
 
     # ── Acciones ─────────────────────────────────────────────────────────────
 
