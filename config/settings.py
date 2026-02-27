@@ -6,7 +6,7 @@ import os
 import sys
 
 # Versión actual de la aplicación
-APP_VERSION = "1.5.10"
+APP_VERSION = "1.5.11"
 
 # Detectar si está corriendo como .exe empaquetado por PyInstaller
 def is_frozen():

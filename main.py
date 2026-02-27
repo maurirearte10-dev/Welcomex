@@ -430,23 +430,31 @@ class WelcomeXApp(ctk.CTk):
             self.after(4000, lambda: self._update_win.destroy())
 
     def _launch_installer(self, installer_path):
-        """Ejecuta el instalador en modo silencioso.
-        Inno Setup cierra WelcomeX via CloseApplications=force y lo reinicia
-        automáticamente con RestartApplications=yes — sin terminal, sin DLL race."""
-        import subprocess, sys
+        """Ejecuta el instalador solicitando elevación UAC (ShellExecute runas).
+        Necesario cuando WelcomeX está instalado en Program Files: sin admin
+        Inno Setup falla con error código 5 (Acceso denegado) al reemplazar archivos."""
+        import sys
 
-        # El instalador se lanza oculto (CREATE_NO_WINDOW).
-        # /CLOSEAPPLICATIONS: Inno Setup cierra WelcomeX.exe (este proceso)
-        # /RESTARTAPPLICATIONS: Inno Setup reinicia WelcomeX cuando termina.
-        # No necesitamos hacer nada más — el instalador nos maneja.
+        params = '/VERYSILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS'
+
+        if sys.platform == "win32":
+            import ctypes
+            # ShellExecuteW con 'runas' solicita elevación UAC automáticamente.
+            # SW_SHOWNORMAL=1 permite que el diálogo UAC sea visible.
+            ret = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", installer_path, params, None, 1
+            )
+            if ret > 32:
+                # Éxito: el instalador elevado ya está corriendo
+                self.after(3500, sys.exit)
+                return
+
+        # Fallback sin elevación (Linux/Mac o si ShellExecute falla)
+        import subprocess
         subprocess.Popen(
-            [installer_path,
-             '/VERYSILENT',
-             '/CLOSEAPPLICATIONS',
-             '/RESTARTAPPLICATIONS'],
-            creationflags=subprocess.CREATE_NO_WINDOW
+            [installer_path] + params.split(),
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         )
-        # Salir como fallback (el instalador normalmente nos cierra antes)
         self.after(4000, sys.exit)
 
     def mostrar_ventana_updates(self):
