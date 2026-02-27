@@ -69,14 +69,12 @@ class _DPIAwareToplevel(ctk.CTkToplevel):
                 w, h = int(m.group(1)), int(m.group(2))
                 sw = int(w * s)
                 sh = int(h * s)
-                # Solo recortar si REALMENTE se pasa de la pantalla (40px margen ancho, 80px para taskbar+bordes)
+                # Cap suave: 96% ancho, 93% alto — los botones siempre quedan visibles
                 try:
-                    max_w = self.winfo_screenwidth()  - 40
-                    max_h = self.winfo_screenheight() - 80
-                    if sw > max_w:
-                        sw = max_w
-                    if sh > max_h:
-                        sh = max_h
+                    max_w = int(self.winfo_screenwidth()  * 0.96)
+                    max_h = int(self.winfo_screenheight() * 0.93)
+                    sw = min(sw, max_w)
+                    sh = min(sh, max_h)
                 except Exception:
                     pass
                 self._dpi_orig_w = sw
@@ -97,12 +95,10 @@ class _DPIAwareToplevel(ctk.CTkToplevel):
                 sw = int(w * s)
                 sh = int(h * s)
                 try:
-                    max_w = self.winfo_screenwidth()  - 40
-                    max_h = self.winfo_screenheight() - 80
-                    if sw > max_w:
-                        sw = max_w
-                    if sh > max_h:
-                        sh = max_h
+                    max_w = int(self.winfo_screenwidth()  * 0.96)
+                    max_h = int(self.winfo_screenheight() * 0.93)
+                    sw = min(sw, max_w)
+                    sh = min(sh, max_h)
                 except Exception:
                     pass
                 x = (self.winfo_screenwidth()  - sw) // 2
