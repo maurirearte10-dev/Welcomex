@@ -605,7 +605,7 @@ class WelcomeXApp(ctk.CTk):
                         height=36,
                         fg_color="#10b981", hover_color="#059669",
                         font=("Segoe UI", 13, "bold"),
-                        command=lambda url=dl_url: webbrowser.open(url)
+                        command=lambda v=ver, url=dl_url: self._start_download(v, url)
                     ).pack(fill="x")
 
             # Padding final
