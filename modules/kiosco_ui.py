@@ -92,6 +92,9 @@ class KioscoWindow(ctk.CTkToplevel):
         self.ultimo_invitado_acreditado = None
         self.ultimo_video_acreditado = None
 
+        # Timer para auto-ocultar panel de control
+        self._hide_panel_timer = None
+
         # VLC player para video con audio
         self.vlc_instance = None
         self.vlc_player = None
@@ -128,38 +131,13 @@ class KioscoWindow(ctk.CTkToplevel):
         self.video_label = ctk.CTkLabel(self.main_frame, text="")
         self.video_label.place(x=0, y=0, relwidth=1, relheight=1)
 
-        # Botón repetir — semi-oculto en esquina inferior derecha
-        # Casi invisible contra el fondo negro, pero tappeable por el operador
-        self.btn_repetir = ctk.CTkButton(
-            self.main_frame,
-            text="↺",
-            width=52, height=52,
-            corner_radius=26,
-            fg_color="transparent",
-            hover_color="#2a2a2e",
-            border_color="#2a2a2e",
-            border_width=1,
-            text_color="#3a3a3a",
-            font=("Segoe UI", 24),
-            command=self.repetir_ultima_acreditacion
-        )
-        self.btn_repetir.place(relx=0.99, rely=0.99, anchor="se")
+        # Panel de control flotante con transparencia real (Toplevel + alpha).
+        # En estado oculto: 0 píxeles ocupados.
+        # En estado visible: overlay semi-transparente — el video se ve por detrás.
+        self._panel_win = None  # se crea lazy en _show_ctrl_panel
 
-        # Botón salir kiosco — semi-oculto en esquina inferior izquierda
-        self.btn_salir = ctk.CTkButton(
-            self.main_frame,
-            text="✕",
-            width=52, height=52,
-            corner_radius=26,
-            fg_color="transparent",
-            hover_color="#2a2a2e",
-            border_color="#2a2a2e",
-            border_width=1,
-            text_color="#3a3a3a",
-            font=("Segoe UI", 24),
-            command=self.destroy
-        )
-        self.btn_salir.place(relx=0.01, rely=0.99, anchor="sw")
+        # Detectar movimiento de mouse para mostrar el panel al acercarse a la esquina
+        self.main_frame.bind("<Motion>", self._on_mouse_motion)
 
         # Verificar si hay video
         self.video_path = evento.get('video_loop')
@@ -489,6 +467,77 @@ class KioscoWindow(ctk.CTkToplevel):
                     self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}\nMESA {invitado['mesa']}", "#10b981", 3000)
                 else:
                     self.mostrar_overlay(f"✅ BIENVENIDO\n{nombre}", "#10b981", 3000)
+
+    # ── Panel de control ocultable ────────────────────────────────────────────
+
+    def _on_mouse_motion(self, event):
+        """Muestra el panel al acercarse a la esquina inferior derecha"""
+        w = self.main_frame.winfo_width()
+        h = self.main_frame.winfo_height()
+        if w < 2 or h < 2:
+            return
+        zona = int(min(w, h) * 0.10)  # 10% del lado menor
+        if event.x > w - zona and event.y > h - zona:
+            self._show_ctrl_panel()
+
+    def _create_panel_win(self):
+        """Crea el Toplevel flotante semi-transparente (lazy init)."""
+        import tkinter as tk
+        win = tk.Toplevel(self)
+        win.overrideredirect(True)          # sin barra de título
+        win.attributes('-topmost', True)
+        win.attributes('-alpha', 0.72)      # 72% opaco → video visible por detrás
+        win.configure(bg="#0a0a1e")
+
+        _bs = dict(bg="#0a0a1e", fg="#9999cc", bd=0, relief="flat",
+                   font=("Segoe UI", 24), cursor="hand2",
+                   padx=14, pady=10,
+                   activebackground="#1a1a3a", activeforeground="#ffffff")
+        tk.Button(win, text="↺", command=self.repetir_ultima_acreditacion, **_bs).pack(fill="x")
+        tk.Button(win, text="⊟", command=self.minimizar_kiosco,            **_bs).pack(fill="x")
+        tk.Button(win, text="✕", command=self.destroy,                     **_bs).pack(fill="x")
+
+        win.bind("<Leave>", self._panel_mouse_leave)
+        win.withdraw()
+        self._panel_win = win
+
+    def _show_ctrl_panel(self):
+        if self._panel_win is None or not self._panel_win.winfo_exists():
+            self._create_panel_win()
+        if self._hide_panel_timer:
+            self.after_cancel(self._hide_panel_timer)
+            self._hide_panel_timer = None
+        # Posicionar en esquina inferior derecha de la pantalla
+        self._panel_win.update_idletasks()
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        pw = self._panel_win.winfo_reqwidth()
+        ph = self._panel_win.winfo_reqheight()
+        self._panel_win.geometry(f"+{sw - pw - 12}+{sh - ph - 12}")
+        self._panel_win.deiconify()
+        self._panel_win.lift()
+
+    def _hide_ctrl_panel(self):
+        if self._panel_win and self._panel_win.winfo_exists():
+            self._panel_win.withdraw()
+
+    def _panel_mouse_leave(self, event):
+        if self._hide_panel_timer:
+            self.after_cancel(self._hide_panel_timer)
+        self._hide_panel_timer = self.after(2000, self._hide_ctrl_panel)
+
+    # ── Acciones ─────────────────────────────────────────────────────────────
+
+    def minimizar_kiosco(self):
+        """Minimiza el kiosco a la barra de tareas"""
+        self.attributes('-fullscreen', False)
+        self.iconify()
+        # Al restaurar, volver a fullscreen
+        self.bind('<Map>', self._restaurar_fullscreen)
+
+    def _restaurar_fullscreen(self, event=None):
+        self.unbind('<Map>')
+        self.after(150, lambda: self.attributes('-fullscreen', True))
 
     def repetir_ultima_acreditacion(self):
         """F5 — repite el video/overlay del último invitado acreditado"""

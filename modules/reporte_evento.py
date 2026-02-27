@@ -6,6 +6,10 @@ from datetime import datetime
 from collections import defaultdict
 from modules.database import db
 
+# Usar la versión DPI-aware si ya fue registrada por main.py,
+# de lo contrario usar la original (ej. en tests standalone).
+_BaseToplevel = ctk.CTkToplevel
+
 COLORS = {
     "bg":         "#0f172a",
     "card":       "#1e293b",
@@ -20,7 +24,7 @@ COLORS = {
 }
 
 
-class ReporteEvento(ctk.CTkToplevel):
+class ReporteEvento(_BaseToplevel):
 
     def __init__(self, parent, evento):
         super().__init__(parent)
@@ -238,9 +242,9 @@ class ReporteEvento(ctk.CTkToplevel):
 
         ctk.CTkButton(btn_frame, text="Cerrar",
                       command=self.destroy,
-                      height=48, font=("Segoe UI", 14),
+                      width=140, height=48, font=("Segoe UI", 14),
                       fg_color="transparent", border_width=2,
-                      border_color=COLORS["border"]).pack(side="left", width=140)
+                      border_color=COLORS["border"]).pack(side="left")
 
     # ------------------------------------------------------------------
     # Helpers de UI

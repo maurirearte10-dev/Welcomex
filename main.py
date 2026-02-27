@@ -32,6 +32,88 @@ ctk.set_appearance_mode(_load_theme())
 ctk.set_default_color_theme("blue")
 
 
+def _bind_ctx_menu(entry):
+    """Agrega menú contextual de copiar/pegar a un CTkEntry (click derecho)."""
+    import tkinter as tk
+    try:
+        w = entry._entry  # widget interno de CTkEntry
+    except AttributeError:
+        w = entry
+    menu = tk.Menu(w, tearoff=0)
+    menu.add_command(label="Cortar",           command=lambda: w.event_generate("<<Cut>>"))
+    menu.add_command(label="Copiar",           command=lambda: w.event_generate("<<Copy>>"))
+    menu.add_command(label="Pegar",            command=lambda: w.event_generate("<<Paste>>"))
+    menu.add_separator()
+    menu.add_command(label="Seleccionar todo", command=lambda: (w.focus_set(), w.event_generate("<<SelectAll>>")))
+    w.bind("<Button-3>", lambda e: (w.focus_set(), menu.tk_popup(e.x_root, e.y_root)))
+
+
+# ---------------------------------------------------------------------------
+# DPI-aware CTkToplevel — escala geometry() automáticamente en Windows
+# con display scaling > 100% (ej. 125%, 150%). Sin este ajuste, CTk escala
+# los widgets internamente pero el tamaño de ventana queda sin escalar,
+# haciendo que los botones del fondo queden cortados.
+# ---------------------------------------------------------------------------
+import re as _re
+
+class _DPIAwareToplevel(ctk.CTkToplevel):
+    """CTkToplevel que auto-escala geometry("WxH") según el DPI del sistema."""
+    _dpi_scale: float = 1.0
+
+    def geometry(self, geo=None):
+        if geo:
+            s = _DPIAwareToplevel._dpi_scale
+            # Solo tamaño: "WxH"
+            m = _re.match(r'^(\d+)x(\d+)$', geo)
+            if m:
+                w, h = int(m.group(1)), int(m.group(2))
+                sw = int(w * s)
+                sh = int(h * s)
+                # Limitar al espacio disponible en pantalla
+                try:
+                    sw = min(sw, int(self.winfo_screenwidth()  * 0.92))
+                    sh = min(sh, int(self.winfo_screenheight() * 0.88))
+                except Exception:
+                    pass
+                self._dpi_orig_w = sw
+                self._dpi_orig_h = sh
+                return super().geometry(f"{sw}x{sh}")
+            # Solo posición: "+X+Y" — re-centrar con dimensiones ya ajustadas
+            mp = _re.match(r'^\+(-?\d+)\+(-?\d+)$', geo)
+            if mp and hasattr(self, '_dpi_orig_w'):
+                sw = self._dpi_orig_w
+                sh = self._dpi_orig_h
+                x = (self.winfo_screenwidth()  - sw) // 2
+                y = max(10, (self.winfo_screenheight() - sh) // 2)
+                return super().geometry(f"+{x}+{y}")
+            # Tamaño + posición combinados: "WxH+X+Y"
+            mc = _re.match(r'^(\d+)x(\d+)(\+.+)$', geo)
+            if mc:
+                w, h = int(mc.group(1)), int(mc.group(2))
+                sw = int(w * s)
+                sh = int(h * s)
+                try:
+                    sw = min(sw, int(self.winfo_screenwidth()  * 0.92))
+                    sh = min(sh, int(self.winfo_screenheight() * 0.88))
+                except Exception:
+                    pass
+                x = (self.winfo_screenwidth()  - sw) // 2
+                y = max(10, (self.winfo_screenheight() - sh) // 2)
+                return super().geometry(f"{sw}x{sh}+{x}+{y}")
+        return super().geometry(geo)
+
+# Detectar DPI del sistema (sin necesitar ventana)
+try:
+    from ctypes import windll as _windll
+    _sys_dpi = _windll.user32.GetDpiForSystem()
+    _DPIAwareToplevel._dpi_scale = max(1.0, round(_sys_dpi / 96.0, 2))
+except Exception:
+    _DPIAwareToplevel._dpi_scale = 1.0
+
+# Reemplazar CTkToplevel globalmente — afecta TODOS los diálogos de la app
+ctk.CTkToplevel = _DPIAwareToplevel
+
+
 class WelcomeXApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -330,28 +412,24 @@ class WelcomeXApp(ctk.CTk):
             self.after(4000, lambda: self._update_win.destroy())
 
     def _launch_installer(self, installer_path):
-        """Ejecuta el instalador en modo silencioso, luego relanza WelcomeX automáticamente.
-        Usa VBScript con WScript.Shell.Run(windowStyle=0) — completamente sin ventana."""
-        import subprocess, sys, os, tempfile
+        """Ejecuta el instalador en modo silencioso.
+        Inno Setup cierra WelcomeX via CloseApplications=force y lo reinicia
+        automáticamente con RestartApplications=yes — sin terminal, sin DLL race."""
+        import subprocess, sys
 
-        exe_path = sys.executable
-
-        # VBScript: windowStyle=0 garantiza ejecución totalmente oculta en Windows.
-        # bWaitOnReturn=True en el instalador asegura que el relanzamiento ocurre
-        # recién cuando la instalación terminó.
-        vbs_path = os.path.join(tempfile.gettempdir(), "welcomex_update.vbs")
-        with open(vbs_path, 'w') as f:
-            f.write('WScript.Sleep 3000\n')
-            f.write('Dim sh : Set sh = CreateObject("WScript.Shell")\n')
-            f.write(f'sh.Run Chr(34) & "{installer_path}" & Chr(34) & " /VERYSILENT /CLOSEAPPLICATIONS", 0, True\n')
-            f.write('WScript.Sleep 2000\n')
-            f.write(f'sh.Run Chr(34) & "{exe_path}" & Chr(34), 1, False\n')
-
+        # El instalador se lanza oculto (CREATE_NO_WINDOW).
+        # /CLOSEAPPLICATIONS: Inno Setup cierra WelcomeX.exe (este proceso)
+        # /RESTARTAPPLICATIONS: Inno Setup reinicia WelcomeX cuando termina.
+        # No necesitamos hacer nada más — el instalador nos maneja.
         subprocess.Popen(
-            ['wscript', '//Nologo', vbs_path],
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+            [installer_path,
+             '/VERYSILENT',
+             '/CLOSEAPPLICATIONS',
+             '/RESTARTAPPLICATIONS'],
+            creationflags=subprocess.CREATE_NO_WINDOW
         )
-        sys.exit(0)
+        # Salir como fallback (el instalador normalmente nos cierra antes)
+        self.after(4000, sys.exit)
 
     def mostrar_ventana_updates(self):
         """Ventana visual con historial completo de actualizaciones"""
@@ -5232,6 +5310,7 @@ class WelcomeXApp(ctk.CTk):
                                 font=("Arial", 14),
                                 placeholder_text="XXXXX-XXXXX-XXXXX-XXXXX")
         entry_key.pack(pady=(0, 20))
+        _bind_ctx_menu(entry_key)  # click derecho → copiar/pegar
 
         # Label para mensajes
         msg_label = ctk.CTkLabel(inner, text="", font=("Arial", 12), wraplength=400)

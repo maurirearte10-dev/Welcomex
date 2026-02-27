@@ -2,7 +2,7 @@
 ; Instalador profesional con acceso directo, desinstalador y todo incluido
 
 #define MyAppName "WelcomeX"
-#define MyAppVersion "1.4.6"
+#define MyAppVersion "1.5.1"
 #define MyAppPublisher "Pampa Guazú"
 #define MyAppURL "https://pampaguazu.com.ar"
 #define MyAppExeName "WelcomeX.exe"
@@ -32,7 +32,7 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 CloseApplications=force
 CloseApplicationsFilter=WelcomeX.exe
-RestartApplications=no
+RestartApplications=yes
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
@@ -71,11 +71,29 @@ Type: filesandordirs; Name: "{app}\__pycache__"
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
+  TempDir: String;
+  SR: TFindRec;
 begin
   // Matar WelcomeX.exe si esta corriendo (forzado)
   Exec('taskkill', '/F /IM WelcomeX.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  // Esperar un momento para que el proceso termine completamente
-  Sleep(1000);
+  // Esperar a que el proceso termine y libere recursos
+  Sleep(1500);
+
+  // Limpiar directorios _MEI* stale de PyInstaller en %TEMP%
+  // Cuando WelcomeX es force-killed, PyInstaller no puede limpiar su directorio
+  // temporal. Si queda incompleto, el siguiente arranque falla con DLL error.
+  TempDir := GetEnv('TEMP');
+  if FindFirst(TempDir + '\_MEI*', SR) then begin
+    try
+      repeat
+        if (SR.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+          DelTree(TempDir + '\' + SR.Name, True, True, True);
+      until not FindNext(SR);
+    finally
+      FindClose(SR);
+    end;
+  end;
+
   Result := True;
 end;
 
