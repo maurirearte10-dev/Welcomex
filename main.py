@@ -1414,57 +1414,6 @@ class WelcomeXApp(ctk.CTk):
                         justify="left").pack(anchor="w", pady=(5, 0))
 
         # ====================
-        # 3. RUTAS Y CARPETAS
-        # ====================
-        rutas_card = ctk.CTkFrame(self.content, fg_color=COLORS["card"], corner_radius=10)
-        rutas_card.pack(fill="x", pady=15)
-
-        rut_inner = ctk.CTkFrame(rutas_card, fg_color="transparent")
-        rut_inner.pack(fill="x", padx=25, pady=20)
-
-        ctk.CTkLabel(rut_inner, text=f"📁 {t('config.download_folder')}",
-                    font=("Arial", 20, "bold")).pack(anchor="w", pady=(0, 15))
-
-        # Carpeta de descargas
-        db.connect()
-        db.cursor.execute("SELECT valor FROM configuracion WHERE clave = 'ruta_descargas'")
-        row = db.cursor.fetchone()
-        ruta_actual = row['valor'] if row else os.path.join(os.path.expanduser("~"), "Downloads")
-        db.disconnect()
-
-        ruta_frame = ctk.CTkFrame(rut_inner, fg_color=COLORS["bg"], corner_radius=8)
-        ruta_frame.pack(fill="x", pady=10)
-        ruta_content = ctk.CTkFrame(ruta_frame, fg_color="transparent")
-        ruta_content.pack(fill="x", padx=15, pady=12)
-
-        ctk.CTkLabel(ruta_content, text=t("config.download_folder_label"),
-                    font=("Arial", 14)).pack(anchor="w")
-        ruta_label = ctk.CTkLabel(ruta_content, text=ruta_actual,
-                                  font=("Arial", 13), text_color=COLORS["text_light"])
-        ruta_label.pack(anchor="w", pady=(5, 0))
-
-        def cambiar_ruta():
-            from tkinter import filedialog
-            nueva_ruta = filedialog.askdirectory(title="Seleccionar Carpeta de Descargas")
-            if nueva_ruta:
-                # Guardar
-                db.connect()
-                db.cursor.execute('''
-                    INSERT OR REPLACE INTO configuracion (clave, valor)
-                    VALUES ('ruta_descargas', ?)
-                ''', (nueva_ruta,))
-                db.connection.commit()
-                db.disconnect()
-
-                ruta_label.configure(text=nueva_ruta)
-                self.mostrar_mensaje("Éxito", "Carpeta de descargas actualizada", "success")
-
-        ctk.CTkButton(rut_inner, text=f"📂 {t('config.change_folder')}",
-                     command=cambiar_ruta,
-                     height=40, width=200, font=("Arial", 13),
-                     fg_color=COLORS["primary"]).pack(pady=(10, 0))
-
-        # ====================
         # 4. SEGURIDAD
         # ====================
         seguridad_card = ctk.CTkFrame(self.content, fg_color=COLORS["card"], corner_radius=10)
@@ -2805,100 +2754,100 @@ class WelcomeXApp(ctk.CTk):
         
         d = ctk.CTkToplevel(self)
         d.title("Nuevo Evento")
-        d.geometry("600x750")
+        d.geometry("560x660")
         d.transient(self)
         d.grab_set()
-        
+
         # Centrar
         d.update_idletasks()
-        x = (d.winfo_screenwidth() // 2) - 300
-        y = (d.winfo_screenheight() // 2) - 375
-        d.geometry(f"600x750+{x}+{y}")
-        
-        container = ctk.CTkFrame(d, fg_color=COLORS["bg"])
-        container.pack(fill="both", expand=True, padx=35, pady=35)
-        
-        ctk.CTkLabel(container, text="Crear Nuevo Evento", 
-                    font=("Arial", 26, "bold")).pack(pady=(0, 30))
-        
+        x = (d.winfo_screenwidth() // 2) - 280
+        y = (d.winfo_screenheight() // 2) - 330
+        d.geometry(f"560x660+{x}+{y}")
+
+        container = ctk.CTkScrollableFrame(d, fg_color=COLORS["bg"])
+        container.pack(fill="both", expand=True, padx=15, pady=15)
+
+        ctk.CTkLabel(container, text="Crear Nuevo Evento",
+                    font=("Arial", 21, "bold")).pack(pady=(0, 18))
+
         # Nombre
         ctk.CTkLabel(container, text="Nombre del Evento *", anchor="w",
-                    font=("Arial", 13)).pack(fill="x")
-        e_nombre = ctk.CTkEntry(container, height=45, font=("Arial", 14),
+                    font=("Arial", 12)).pack(fill="x")
+        e_nombre = ctk.CTkEntry(container, height=38, font=("Arial", 13),
                                fg_color=COLORS["card"])
-        e_nombre.pack(fill="x", pady=(8, 15))
-        
+        e_nombre.pack(fill="x", pady=(5, 10))
+
         # Fecha con calendario
         ctk.CTkLabel(container, text="Fecha del Evento *", anchor="w",
-                    font=("Arial", 13)).pack(fill="x")
-        
+                    font=("Arial", 12)).pack(fill="x")
+
         fecha_frame = ctk.CTkFrame(container, fg_color="transparent")
-        fecha_frame.pack(fill="x", pady=(8, 15))
-        
-        e_fecha = ctk.CTkEntry(fecha_frame, height=45, font=("Arial", 14),
+        fecha_frame.pack(fill="x", pady=(5, 10))
+
+        e_fecha = ctk.CTkEntry(fecha_frame, height=38, font=("Arial", 13),
                               fg_color=COLORS["card"], width=400)
         e_fecha.pack(side="left", fill="x", expand=True)
         e_fecha.insert(0, datetime.now().strftime("%Y-%m-%d"))
-        
+
         def abrir_calendario():
             cal_window = ctk.CTkToplevel(d)
             cal_window.title("Seleccionar Fecha")
             cal_window.geometry("350x400")
             cal_window.transient(d)
             cal_window.grab_set()
-            
+
             # Centrar
             cal_window.update_idletasks()
             x = d.winfo_x() + (d.winfo_width() // 2) - 175
             y = d.winfo_y() + (d.winfo_height() // 2) - 200
             cal_window.geometry(f"350x400+{x}+{y}")
-            
+
             from tkcalendar import Calendar
-            
+
             cal = Calendar(cal_window, selectmode='day',
                           year=datetime.now().year,
                           month=datetime.now().month,
                           day=datetime.now().day,
                           date_pattern='yyyy-mm-dd')
             cal.pack(pady=20, padx=20, fill="both", expand=True)
-            
+
             def seleccionar():
                 e_fecha.delete(0, 'end')
                 e_fecha.insert(0, cal.get_date())
                 cal_window.destroy()
-            
+
             ctk.CTkButton(cal_window, text="Seleccionar", command=seleccionar,
-                         height=45, font=("Arial", 14)).pack(pady=15)
-        
+                         height=40, font=("Arial", 13)).pack(pady=12)
+
         ctk.CTkButton(fecha_frame, text="📅", command=abrir_calendario,
-                     width=60, height=45, font=("Arial", 18)).pack(side="left", padx=5)
-        
+                     width=50, height=38, font=("Arial", 16)).pack(side="left", padx=5)
+
         # Hora inicio
         ctk.CTkLabel(container, text="Hora de Inicio (HH:MM) *", anchor="w",
-                    font=("Arial", 13)).pack(fill="x")
-        e_hora = ctk.CTkEntry(container, height=45, font=("Arial", 14),
+                    font=("Arial", 12)).pack(fill="x")
+        e_hora = ctk.CTkEntry(container, height=38, font=("Arial", 13),
                              fg_color=COLORS["card"])
-        e_hora.pack(fill="x", pady=(8, 15))
+        e_hora.pack(fill="x", pady=(5, 10))
         e_hora.insert(0, "20:00")
-        
+
         # Hora límite
         ctk.CTkLabel(container, text="Hora Límite Acreditación (HH:MM) - Opcional", anchor="w",
-                    font=("Arial", 13)).pack(fill="x")
-        e_limite = ctk.CTkEntry(container, height=45, font=("Arial", 14),
+                    font=("Arial", 12)).pack(fill="x")
+        e_limite = ctk.CTkEntry(container, height=38, font=("Arial", 13),
                                fg_color=COLORS["card"])
-        e_limite.pack(fill="x", pady=(8, 15))
-        
+        e_limite.pack(fill="x", pady=(5, 10))
+
         # Video Loop
         ctk.CTkLabel(container, text="Video Loop (opcional)", anchor="w",
-                    font=("Arial", 13)).pack(fill="x")
-        
+                    font=("Arial", 12)).pack(fill="x")
+
         video_frame = ctk.CTkFrame(container, fg_color="transparent")
-        video_frame.pack(fill="x", pady=(8, 30))
-        
-        e_video = ctk.CTkEntry(video_frame, height=45, font=("Arial", 14),
+        video_frame.pack(fill="x", pady=(5, 15))
+
+        e_video = ctk.CTkEntry(video_frame, height=38, font=("Arial", 13),
                               fg_color=COLORS["card"], placeholder_text="Sin video")
         e_video.pack(side="left", fill="x", expand=True)
-        
+
         def seleccionar_video():
             filepath = filedialog.askopenfilename(
                 title="Seleccionar Video Loop",
@@ -2907,21 +2856,21 @@ class WelcomeXApp(ctk.CTk):
             if filepath:
                 e_video.delete(0, 'end')
                 e_video.insert(0, filepath)
-        
+
         ctk.CTkButton(video_frame, text="📁", command=seleccionar_video,
-                     width=60, height=45, font=("Arial", 18)).pack(side="left", padx=5)
-        
+                     width=50, height=38, font=("Arial", 16)).pack(side="left", padx=5)
+
         def guardar():
             nombre = e_nombre.get().strip()
             fecha = e_fecha.get().strip()
             hora = e_hora.get().strip()
             limite = e_limite.get().strip() if e_limite.get().strip() else None
             video_loop = e_video.get().strip() if e_video.get().strip() else None
-            
+
             if not nombre or not fecha or not hora:
                 self.mostrar_mensaje("Error", "Nombre, fecha y hora de inicio son obligatorios", "error")
                 return
-            
+
             resultado = db.crear_evento(
                 usuario_id=self.usuario_actual['id'],
                 nombre=nombre,
@@ -2930,22 +2879,22 @@ class WelcomeXApp(ctk.CTk):
                 hora_limite=limite,
                 video_loop=video_loop
             )
-            
+
             if resultado["success"]:
                 d.destroy()
                 self.mostrar_mensaje("Éxito", f"Evento '{nombre}' creado correctamente", "success")
                 self.mostrar_eventos()
             else:
                 self.mostrar_mensaje("Error", resultado.get("error", "Error al crear evento"), "error")
-        
+
         btn_frame = ctk.CTkFrame(container, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=15)
-        
-        ctk.CTkButton(btn_frame, text="Crear Evento", command=guardar, height=55,
-                     font=("Arial", 15, "bold"), fg_color=COLORS["success"]).pack(fill="x", pady=(0, 8))
-        
-        ctk.CTkButton(btn_frame, text="Cancelar", command=d.destroy, height=50,
-                     fg_color="transparent", border_width=2, 
+        btn_frame.pack(fill="x", pady=10)
+
+        ctk.CTkButton(btn_frame, text="Crear Evento", command=guardar, height=45,
+                     font=("Arial", 14, "bold"), fg_color=COLORS["success"]).pack(fill="x", pady=(0, 8))
+
+        ctk.CTkButton(btn_frame, text="Cancelar", command=d.destroy, height=42,
+                     fg_color="transparent", border_width=2,
                      border_color=COLORS["border"]).pack(fill="x")
     
     def iniciar_evento(self, evento):
@@ -3147,6 +3096,42 @@ class WelcomeXApp(ctk.CTk):
                         text="🔔  Sonido al acreditar  (beep de confirmación)",
                         variable=usar_sonido_var,
                         font=("Arial", 13)).pack(anchor="w", pady=(0, 8))
+
+        # ── Carpeta de Trabajo ──
+        ctk.CTkFrame(scroll, height=2, fg_color=COLORS["border"]).pack(fill="x", pady=(8, 12))
+        ctk.CTkLabel(scroll, text="📂  Carpeta de Trabajo", anchor="w",
+                     font=("Arial", 13, "bold")).pack(fill="x")
+        ctk.CTkLabel(scroll,
+                     text="Carpeta donde se guarda el material del evento (QR, Excel, etc.)",
+                     anchor="w", font=("Arial", 11),
+                     text_color=COLORS["text_light"]).pack(fill="x", pady=(2, 6))
+
+        ruta_actual = evento.get('ruta_trabajo') or ""
+        ruta_trabajo_label = ctk.CTkLabel(scroll,
+                                          text=ruta_actual if ruta_actual else "Sin carpeta asignada — los archivos irán a Descargas",
+                                          anchor="w", font=("Arial", 12),
+                                          text_color=COLORS["text_light"] if not ruta_actual else COLORS["text"])
+        ruta_trabajo_label.pack(fill="x", pady=(0, 6))
+
+        def cambiar_carpeta_trabajo():
+            nueva = filedialog.askdirectory(
+                title=f"Seleccionar carpeta de trabajo para '{evento['nombre']}'",
+                parent=d
+            )
+            if nueva:
+                db.connect()
+                try:
+                    db.cursor.execute("UPDATE eventos SET ruta_trabajo = ? WHERE id = ?",
+                                      (nueva, evento['id']))
+                    db.connection.commit()
+                    evento['ruta_trabajo'] = nueva
+                    ruta_trabajo_label.configure(text=nueva, text_color=COLORS["text"])
+                finally:
+                    db.disconnect()
+
+        ctk.CTkButton(scroll, text="📂  Cambiar Carpeta", command=cambiar_carpeta_trabajo,
+                      height=36, font=("Arial", 12),
+                      fg_color=COLORS["primary"]).pack(anchor="w", pady=(0, 8))
 
         # Separador
         ctk.CTkFrame(scroll, height=2, fg_color=COLORS["border"]).pack(fill="x", pady=15)
@@ -4630,8 +4615,10 @@ class WelcomeXApp(ctk.CTk):
             
             tipo = tipo_var.get()
             nombre_archivo = f"{invitado['apellido']}_{invitado['nombre']}"
-            downloads = Path.home() / "Downloads"
-            
+            ruta_ev = (self.evento_activo or {}).get('ruta_trabajo')
+            carpeta_salida = Path(ruta_ev) if ruta_ev else Path.home() / "Downloads"
+            carpeta_salida.mkdir(parents=True, exist_ok=True)
+
             try:
                 if tipo == "plantilla":
                     # Con plantilla
@@ -4639,28 +4626,28 @@ class WelcomeXApp(ctk.CTk):
                     if not path or not os.path.exists(path):
                         self.mostrar_mensaje("Error", "Selecciona una plantilla", "error")
                         return
-                    
+
                     d.destroy()
-                    
+
                     # Usar misma función que masiva
                     config_qr = {'x': qr_x.get(), 'y': qr_y.get(), 'size': qr_size.get()}
-                    self.generar_invitaciones_proceso("personalizada", [invitado], 
-                                                     plantilla_custom=path, 
+                    self.generar_invitaciones_proceso("personalizada", [invitado],
+                                                     plantilla_custom=path,
                                                      config_qr=config_qr)
                 else:
                     # Solo QR
                     d.destroy()
-                    output_path = downloads / f"{nombre_archivo}_QR.png"
-                    
-                    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, 
+                    output_path = carpeta_salida / f"{nombre_archivo}_QR.png"
+
+                    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H,
                                       box_size=10, border=4)
                     qr.add_data(invitado['qr_code'])
                     qr.make(fit=True)
                     qr_img = qr.make_image(fill_color="black", back_color="white")
                     qr_img.save(str(output_path))
-                    
-                    self.mostrar_mensaje("✅ Generado", 
-                                       f"QR generado:\n\n{output_path.name}\n\nEn: Downloads", 
+
+                    self.mostrar_mensaje("✅ Generado",
+                                       f"QR generado:\n\n{output_path.name}\n\nEn: {carpeta_salida}",
                                        "success")
             except Exception as e:
                 self.mostrar_mensaje("Error", f"Error:\n{str(e)}", "error")
@@ -5108,7 +5095,10 @@ class WelcomeXApp(ctk.CTk):
                     return
                 
                 zip_filename = f"Invitaciones_{nombre_evento}_{timestamp}.zip"
-                zip_path = Path.home() / "Downloads" / zip_filename
+                ruta_ev = self.evento_activo.get('ruta_trabajo') if self.evento_activo else None
+                carpeta_zip = Path(ruta_ev) if ruta_ev else Path.home() / "Downloads"
+                carpeta_zip.mkdir(parents=True, exist_ok=True)
+                zip_path = carpeta_zip / zip_filename
                 
                 print(f"\n[DEBUG] Creando ZIP: {zip_path}")
                 

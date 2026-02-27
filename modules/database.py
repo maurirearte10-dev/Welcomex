@@ -238,6 +238,12 @@ class DatabaseManager:
                 self.cursor.execute("ALTER TABLE eventos ADD COLUMN usar_sonido INTEGER DEFAULT 1")
                 self.connection.commit()
                 print("[MIGRACIÓN] ✅ Columna usar_sonido agregada")
+
+            if 'ruta_trabajo' not in columnas_eventos:
+                print("[MIGRACIÓN] Agregando columna ruta_trabajo...")
+                self.cursor.execute("ALTER TABLE eventos ADD COLUMN ruta_trabajo TEXT")
+                self.connection.commit()
+                print("[MIGRACIÓN] ✅ Columna ruta_trabajo agregada")
         except Exception as e:
             print(f"[MIGRACIÓN] Error: {e}")
         
@@ -456,17 +462,18 @@ class DatabaseManager:
     # EVENTOS
     # ============================================
     
-    def crear_evento(self, usuario_id, nombre, fecha_evento, hora_inicio=None, 
-                     hora_limite=None, video_loop=None):
+    def crear_evento(self, usuario_id, nombre, fecha_evento, hora_inicio=None,
+                     hora_limite=None, video_loop=None, ruta_trabajo=None):
         """Crear evento"""
         self.connect()
         try:
             self.cursor.execute("""
-                INSERT INTO eventos (usuario_id, nombre, fecha_evento, hora_inicio, 
-                                    hora_limite_acreditacion, video_loop, estado, fecha_creacion)
-                VALUES (?, ?, ?, ?, ?, ?, 'creado', ?)
-            """, (usuario_id, nombre, fecha_evento, hora_inicio, hora_limite, 
-                  video_loop, datetime.now().isoformat()))
+                INSERT INTO eventos (usuario_id, nombre, fecha_evento, hora_inicio,
+                                    hora_limite_acreditacion, video_loop, estado, fecha_creacion,
+                                    ruta_trabajo)
+                VALUES (?, ?, ?, ?, ?, ?, 'creado', ?, ?)
+            """, (usuario_id, nombre, fecha_evento, hora_inicio, hora_limite,
+                  video_loop, datetime.now().isoformat(), ruta_trabajo))
             
             self.connection.commit()
             return {"success": True, "id": self.cursor.lastrowid}

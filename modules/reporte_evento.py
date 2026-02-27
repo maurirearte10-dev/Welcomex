@@ -328,11 +328,13 @@ class ReporteEvento(_BaseToplevel):
             return
 
         from tkinter import filedialog
+        ruta_trabajo = self.evento.get('ruta_trabajo')
         path = filedialog.asksaveasfilename(
             title="Guardar reporte",
             defaultextension=".xlsx",
             filetypes=[("Excel", "*.xlsx")],
-            initialfile=f"reporte_{self.evento['nombre'].replace(' ', '_')}.xlsx"
+            initialfile=f"reporte_{self.evento['nombre'].replace(' ', '_')}.xlsx",
+            initialdir=ruta_trabajo if ruta_trabajo else None
         )
         if not path:
             return
