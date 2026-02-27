@@ -2,7 +2,7 @@
 ; Instalador profesional con acceso directo, desinstalador y todo incluido
 
 #define MyAppName "WelcomeX"
-#define MyAppVersion "1.5.3"
+#define MyAppVersion "1.5.4"
 #define MyAppPublisher "Pampa Guazú"
 #define MyAppURL "https://pampaguazu.com.ar"
 #define MyAppExeName "WelcomeX.exe"
@@ -43,12 +43,8 @@ Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-; Ejecutable principal
-Source: "dist\WelcomeX.exe"; DestDir: "{app}"; Flags: ignoreversion
-; Assets (icono, logo)
-Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Plantilla Excel
-Source: "PLANTILLA_INVITADOS_WELCOMEX.xlsx"; DestDir: "{app}"; Flags: ignoreversion
+; Carpeta completa onedir (no extrae nada a %TEMP%, sin DLL errors)
+Source: "dist\WelcomeX\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Licencia
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
