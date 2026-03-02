@@ -30,6 +30,18 @@ class CSVImporter:
             idx_mesa     = headers.index('Mesa')
             idx_obs      = headers.index('Observaciones') if 'Observaciones' in headers else None
 
+            # Cargar invitados existentes para detectar duplicados
+            try:
+                db.connect()
+                existentes = db.obtener_invitados_evento(self.evento_id)
+                db.disconnect()
+            except Exception:
+                existentes = []
+            nombres_existentes = {
+                (i['nombre'].strip().lower(), i['apellido'].strip().lower())
+                for i in existentes
+            }
+
             total    = 0
             errores  = []
             saltados = []
@@ -46,6 +58,12 @@ class CSVImporter:
 
                 if not nombre or not apellido:
                     saltados.append(f"Fila {row_num}: Sin nombre/apellido")
+                    continue
+
+                # Detectar duplicados con invitados ya cargados
+                clave = (str(nombre).strip().lower(), str(apellido).strip().lower())
+                if clave in nombres_existentes:
+                    saltados.append(f"Fila {row_num}: {apellido} {nombre} - Ya existe")
                     continue
 
                 if not mesa:
