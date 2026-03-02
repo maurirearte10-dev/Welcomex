@@ -332,4 +332,6 @@ class OperatorPanel(ctk.CTkToplevel):
                 self.after_cancel(self._refresh_job)
             except Exception:
                 pass
+        if self.kiosco:
+            self.kiosco.operator_panel_ref = None
         self.destroy()

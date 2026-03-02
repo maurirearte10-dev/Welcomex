@@ -4209,7 +4209,8 @@ class WelcomeXApp(ctk.CTk):
 
             # Panel de operador (ventana secundaria, siempre al frente)
             try:
-                OperatorPanel(self, evento, kiosco_window=kiosco)
+                panel = OperatorPanel(self, evento, kiosco_window=kiosco)
+                kiosco.operator_panel_ref = panel  # referencia para F2
             except Exception as pe:
                 print(f"[OperatorPanel] No se pudo abrir: {pe}")
 

@@ -12,6 +12,30 @@ except:
     VLC_AVAILABLE = False
     print("[VIDEO] VLC no disponible - intentando con OpenCV")
 
+def _get_secondary_monitor():
+    """Devuelve (x, y, w, h) del monitor secundario; si hay solo uno, devuelve el primario."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        monitors = []
+        MONITORENUMPROC = ctypes.WINFUNCTYPE(
+            ctypes.c_bool, ctypes.c_ulong, ctypes.c_ulong,
+            ctypes.POINTER(wintypes.RECT), ctypes.c_double
+        )
+        def _cb(hMonitor, hdcMonitor, lprcMonitor, dwData):
+            r = lprcMonitor.contents
+            monitors.append((r.left, r.top, r.right - r.left, r.bottom - r.top))
+            return True
+        ctypes.windll.user32.EnumDisplayMonitors(None, None, MONITORENUMPROC(_cb), 0)
+        if len(monitors) > 1:
+            secondary = [m for m in monitors if not (m[0] == 0 and m[1] == 0)]
+            if secondary:
+                return secondary[0]
+        return monitors[0] if monitors else (0, 0, 1920, 1080)
+    except Exception:
+        return (0, 0, 1920, 1080)
+
+
 COLORS = {
     "bg": "#0f172a",
     "primary": "#3b82f6",
@@ -62,8 +86,15 @@ class KioscoWindow(ctk.CTkToplevel):
         else:
             self.geometry(f"{screen_width}x{screen_height}")  # Normal
         
-        # Posicionar en (0,0) antes de fullscreen
-        self.geometry(f"+0+0")
+        # Posicionar en monitor secundario (si existe) antes de fullscreen
+        if os.name == 'nt':
+            try:
+                mon_x, mon_y, mon_w, mon_h = _get_secondary_monitor()
+                self.geometry(f"{mon_w}x{mon_h}+{mon_x}+{mon_y}")
+            except Exception:
+                self.geometry(f"+0+0")
+        else:
+            self.geometry(f"+0+0")
         
         # Actualizar para que tome los valores
         self.update_idletasks()
@@ -651,6 +682,24 @@ class KioscoWindow(ctk.CTkToplevel):
         self.unbind('<Map>')
         self.after(150, lambda: self.attributes('-fullscreen', True))
 
+    def _reabrir_panel_operador(self):
+        """F2 — reabre el panel del operador si fue cerrado, o lo trae al frente"""
+        from modules.operator_panel import OperatorPanel
+        try:
+            if self.operator_panel_ref and self.operator_panel_ref.winfo_exists():
+                self.operator_panel_ref.deiconify()
+                self.operator_panel_ref.lift()
+                return
+        except Exception:
+            pass
+        # Panel cerrado o inválido — recrear
+        try:
+            panel = OperatorPanel(self.master, self.evento, kiosco_window=self)
+            self.operator_panel_ref = panel
+            print(f"[KIOSCO] Panel operador reabierto con F2")
+        except Exception as e:
+            print(f"[KIOSCO] Error reabriendo panel: {e}")
+
     def repetir_ultima_acreditacion(self):
         """F5 — repite el video/overlay del último invitado acreditado"""
         if not self.ultimo_invitado_acreditado:
@@ -883,6 +932,9 @@ class KioscoWindow(ctk.CTkToplevel):
                 return
             elif key == keyboard.Key.f5:
                 self.after(0, self.repetir_ultima_acreditacion)
+                return
+            elif key == keyboard.Key.f2:
+                self.after(0, self._reabrir_panel_operador)
                 return
 
             # Modo escritura: redirigir teclas al buscador del panel operador
