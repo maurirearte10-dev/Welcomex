@@ -671,7 +671,7 @@ class DatabaseManager:
                     (evento_id, qr_code, nombre, apellido, mesa,
                      observaciones, video_personalizado, email, telefono,
                      acompanantes, presente, fecha_registro)
-                VALUES (?,?,?,?,?,?,?,?,?,?,0,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """, rows)
             self.connection.commit()
             return {"success": True, "insertados": len(rows), "qr_codes": qr_codes}
