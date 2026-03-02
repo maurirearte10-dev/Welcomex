@@ -374,8 +374,8 @@ class KioscoWindow(ctk.CTkToplevel):
         print(f"[KIOSCO {self.kiosco_id}] QR RECIBIDO: '{qr_code}'")
         print(f"{'='*60}")
         
-        # Limpiar QR
-        qr_code = qr_code.strip()
+        # Limpiar QR y normalizar a mayúsculas (la pistola puede enviar minúsculas si Caps Lock está activado)
+        qr_code = qr_code.strip().upper()
         
         if not qr_code or len(qr_code) < 5:
             print(f"[ERROR] QR inválido: muy corto o vacío")
@@ -395,7 +395,7 @@ class KioscoWindow(ctk.CTkToplevel):
             print(f"[ERROR] ❌ Invitado NO encontrado en BD")
             print(f"[DEBUG] Código recibido (repr): {repr(qr_code)}")
             self._beep("error")
-            self.mostrar_overlay(f"❌ QR NO REGISTRADO\n{qr_code}", "#ef4444", 4000)
+            self.mostrar_overlay("❌ QR NO REGISTRADO", "#ef4444", 3000)
             return
 
         # Invitado encontrado

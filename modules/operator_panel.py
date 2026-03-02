@@ -22,15 +22,15 @@ class OperatorPanel(ctk.CTkToplevel):
     def __init__(self, parent, evento, kiosco_window=None):
         super().__init__(parent)
 
-        self.evento       = evento
-        self.kiosco       = kiosco_window   # referencia al KioscoWindow
-        self._refresh_job = None
-        self._invitado_sel = None           # invitado seleccionado en la lista
+        self.evento        = evento
+        self.kiosco        = kiosco_window   # referencia al KioscoWindow
+        self._refresh_job  = None
+        self._invitado_sel = None            # invitado seleccionado en la lista
+        self._hash_lista   = None            # hash para detectar cambios reales
 
         self.title(f"Operador — {evento['nombre']}")
         self.geometry("420x680")
-        self.resizable(False, True)
-        self.attributes('-topmost', True)
+        self.resizable(True, True)           # permite mover/arrastrar a otro monitor
         self.configure(fg_color=COLORS["bg"])
 
         # Posicionar en la esquina superior derecha
@@ -134,20 +134,25 @@ class OperatorPanel(ctk.CTkToplevel):
     # ------------------------------------------------------------------
 
     def _refresh(self):
-        """Recarga invitados desde la BD y repinta la lista."""
+        """Recarga invitados desde la BD y repinta solo si hubo cambios."""
         try:
             db.connect()
-            self._todos = db.obtener_invitados_evento(self.evento['id'])
+            nuevos = db.obtener_invitados_evento(self.evento['id'])
             db.disconnect()
         except Exception as e:
             print(f"[OperatorPanel] Error cargando invitados: {e}")
-            self._todos = []
+            nuevos = []
 
-        self._actualizar_stats()
-        self._filtrar()
+        # Calcular hash rápido basado en estado presente de cada invitado
+        nuevo_hash = str([(i['id'], i.get('presente')) for i in nuevos])
+        if nuevo_hash != self._hash_lista:
+            self._todos      = nuevos
+            self._hash_lista = nuevo_hash
+            self._actualizar_stats()
+            self._filtrar()
 
-        # Programar próximo refresh (cada 3 segundos)
-        self._refresh_job = self.after(3000, self._refresh)
+        # Programar próximo refresh (cada 4 segundos)
+        self._refresh_job = self.after(4000, self._refresh)
 
     def _actualizar_stats(self):
         total     = len(self._todos)
@@ -183,8 +188,18 @@ class OperatorPanel(ctk.CTkToplevel):
                          text_color=COLORS["text_light"]).pack(pady=20)
             return
 
-        for inv in invitados:
+        MAX_FILAS = 150
+        total = len(invitados)
+        visibles = invitados[:MAX_FILAS]
+
+        for inv in visibles:
             self._crear_fila(inv)
+
+        if total > MAX_FILAS:
+            ctk.CTkLabel(self.list_frame,
+                         text=f"Mostrando {MAX_FILAS} de {total} — usá el buscador para filtrar",
+                         font=("Segoe UI", 11),
+                         text_color=COLORS["text_light"]).pack(pady=8)
 
     def _crear_fila(self, inv):
         presente = inv.get('presente')

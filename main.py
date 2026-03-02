@@ -594,31 +594,6 @@ class WelcomeXApp(ctk.CTk):
                         text_color=COLORS["text_light"]
                     ).pack(side="right")
 
-                # Lista de cambios
-                changes_frame = ctk.CTkFrame(card, fg_color="transparent")
-                changes_frame.pack(fill="x", padx=20, pady=(5, 15))
-
-                for item in items:
-                    item_frame = ctk.CTkFrame(changes_frame, fg_color="transparent")
-                    item_frame.pack(fill="x", pady=2)
-
-                    ctk.CTkLabel(
-                        item_frame,
-                        text="  •",
-                        font=("Segoe UI", 13),
-                        text_color="#d4af37",
-                        width=25
-                    ).pack(side="left", anchor="n")
-
-                    ctk.CTkLabel(
-                        item_frame,
-                        text=item,
-                        font=("Segoe UI", 13),
-                        text_color=COLORS["text"],
-                        anchor="w",
-                        wraplength=480
-                    ).pack(side="left", fill="x", expand=True)
-
                 # Botón descargar si hay versión nueva
                 if is_latest and not is_current and self.update_info:
                     btn_frame = ctk.CTkFrame(card, fg_color="transparent")
@@ -3333,17 +3308,20 @@ class WelcomeXApp(ctk.CTk):
             else:
                 self.mostrar_mensaje("Error", f"Error: {resultado['error']}", "error")
         
-        # Botones finales
-        btn_final = ctk.CTkFrame(main, fg_color="transparent")
-        btn_final.pack(fill="x", pady=(10, 0))
-        
-        ctk.CTkButton(btn_final, text="💾 Guardar Configuración",
+        # Botones finales — fijados al fondo del diálogo
+        btn_final = ctk.CTkFrame(d, fg_color=COLORS["sidebar"], corner_radius=0)
+        btn_final.pack(fill="x", side="bottom", padx=0, pady=0)
+
+        btn_inner = ctk.CTkFrame(btn_final, fg_color="transparent")
+        btn_inner.pack(fill="x", padx=30, pady=15)
+
+        ctk.CTkButton(btn_inner, text="💾 Guardar Configuración",
                      command=guardar_todos,
-                     height=55, font=("Arial", 16, "bold"),
+                     height=65, font=("Arial", 16, "bold"),
                      fg_color=COLORS["success"]).pack(fill="x", pady=(0, 10))
-        
-        ctk.CTkButton(btn_final, text="Cancelar", command=d.destroy,
-                     height=50, fg_color="transparent",
+
+        ctk.CTkButton(btn_inner, text="Cancelar", command=d.destroy,
+                     height=48, fg_color="transparent",
                      border_width=2, border_color=COLORS["border"]).pack(fill="x")
     
     def eliminar_evento(self, evento):
@@ -4012,7 +3990,7 @@ class WelcomeXApp(ctk.CTk):
                      font=("Arial", 14)).pack(side="left")
 
         ctk.CTkButton(header, text=f"🎰 {t('sorteo.start_raffle')}", command=self.realizar_sorteo,
-                     height=50, width=200, fg_color=COLORS["success"],
+                     height=65, width=200, fg_color=COLORS["success"],
                      font=("Arial", 15, "bold")).pack(side="right")
 
         ctk.CTkLabel(header, text=f"🎲 {t('sorteo.title')}",
@@ -4058,14 +4036,14 @@ class WelcomeXApp(ctk.CTk):
         # Diálogo de configuración
         d = ctk.CTkToplevel(self)
         d.title(t("sorteo.config_title"))
-        d.geometry("600x550")
+        d.geometry("600x620")
         d.transient(self)
         d.grab_set()
 
         d.update_idletasks()
         x = (d.winfo_screenwidth() // 2) - 300
-        y = (d.winfo_screenheight() // 2) - 275
-        d.geometry(f"600x550+{x}+{y}")
+        y = (d.winfo_screenheight() // 2) - 310
+        d.geometry(f"600x620+{x}+{y}")
 
         container = ctk.CTkFrame(d, fg_color=COLORS["bg"])
         container.pack(fill="both", expand=True, padx=40, pady=40)
@@ -4138,7 +4116,7 @@ class WelcomeXApp(ctk.CTk):
         btn_frame.pack(fill="x", pady=20)
 
         ctk.CTkButton(btn_frame, text=f"🎲 {t('sorteo.start_raffle')}", command=ejecutar_sorteo,
-                     height=55, font=("Arial", 16, "bold"),
+                     height=70, font=("Arial", 16, "bold"),
                      fg_color=COLORS["success"]).pack(fill="x", pady=(0, 10))
 
         ctk.CTkButton(btn_frame, text=t("common.cancel"), command=d.destroy,

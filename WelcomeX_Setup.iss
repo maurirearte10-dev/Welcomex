@@ -2,7 +2,7 @@
 ; Instalador profesional con acceso directo, desinstalador y todo incluido
 
 #define MyAppName "WelcomeX"
-#define MyAppVersion "1.5.15"
+#define MyAppVersion "1.5.16"
 #define MyAppPublisher "Pampa Guazú"
 #define MyAppURL "https://pampaguazu.com.ar"
 #define MyAppExeName "WelcomeX.exe"
