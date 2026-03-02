@@ -658,6 +658,15 @@ class KioscoWindow(ctk.CTkToplevel):
         """Reproducir video personalizado/mesa con VLC (audio incluido)"""
         print(f"[KIOSCO] Iniciando video temporal: {video_path}")
 
+        # Restaurar ventana si está minimizada para que VLC pueda renderizar en ella
+        try:
+            if self.wm_state() == 'iconic':
+                self.deiconify()
+                self.lift()
+                self.update_idletasks()
+        except Exception:
+            pass
+
         # Guardar estado del video principal
         self.video_principal_activo_backup = self.video_activo
         self.invitado_temp = invitado
