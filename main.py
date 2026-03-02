@@ -5225,9 +5225,12 @@ class WelcomeXApp(ctk.CTk):
         license_key = self.cargar_license_key()
 
         if license_key:
-            print(f"[WelcomeX] Validando licencia con PAMPA...")
+            print(f"[WelcomeX] Validando licencia con PAMPA (online)...")
 
-            result = self.pampa.validate_license(license_key, app_version=APP_VERSION)
+            result = self.pampa.validate_license(license_key, force_online=True, app_version=APP_VERSION)
+            if not result.get('valid') and result.get('status') in ('connection_error', 'error'):
+                print(f"[WelcomeX] Validación online falló ({result.get('status')}), usando token local...")
+                result = self.pampa.validate_license(license_key, force_online=False, app_version=APP_VERSION)
 
             if result['valid']:
                 print(f"[WelcomeX] ✅ Licencia válida - {result['message']}")
