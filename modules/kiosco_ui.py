@@ -749,9 +749,10 @@ class KioscoWindow(ctk.CTkToplevel):
             # Marcar que estamos en modo temporal para que check_video_loop no interfiera
             self._video_temporal_activo = True
 
-            # Detener el loop actual y cargar el video de mesa SIN opciones de repetición
+            # Detener el loop actual y cargar el video de mesa SIN repetición
             self.vlc_player.stop()
             temp_media = self.vlc_instance.media_new(video_path)
+            temp_media.add_option('input-repeat=0')  # Sobreescribir el repeat=65535 del instance
             self.vlc_player.set_media(temp_media)
             self.vlc_player.play()
             print(f"[KIOSCO] Video temporal VLC iniciado (mismo player, sin ventana nueva)")
