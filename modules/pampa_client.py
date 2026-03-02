@@ -268,6 +268,8 @@ class PampaClient:
         - Si no hay token o expiró: valida online y recibe nuevo JWT
         - Si hardware_id no coincide: bloquea (token copiado)
         """
+        _offline_limit_ctx = None  # Set if offline limit exceeded, used as fallback in exception handlers
+
         # Forzar online si hay cache viejo (migración)
         if self._has_old_cache():
             print("[PAMPA] Detectado cache viejo, forzando validación online para migrar a JWT")
@@ -333,14 +335,13 @@ class PampaClient:
                                 "clock_warning": clock_warning
                             }
                         else:
-                            print(f"[PAMPA] Límite offline superado ({hours_since:.1f}h > {offline_limit}h)")
-                            return {
-                                "valid": False,
-                                "status": "offline_limit",
-                                "message": f"Se superó el límite de {offline_limit} horas sin conexión. Conéctate a internet para continuar.",
-                                "used_cache": True,
+                            print(f"[PAMPA] Límite offline superado ({hours_since:.1f}h > {offline_limit}h) — intentando validación online...")
+                            _offline_limit_ctx = {
+                                "limit": offline_limit,
+                                "hours": hours_since,
                                 "clock_warning": clock_warning
                             }
+                            # No return — caer en validación online
                     except Exception as e:
                         print(f"[PAMPA] Error procesando token: {e}")
 
@@ -387,6 +388,14 @@ class PampaClient:
                 }
 
         except requests.exceptions.Timeout:
+            if _offline_limit_ctx:
+                return {
+                    "valid": False,
+                    "status": "offline_limit",
+                    "message": f"Se superó el límite de {_offline_limit_ctx['limit']} horas sin conexión. Conéctate a internet para continuar.",
+                    "used_cache": True,
+                    "clock_warning": _offline_limit_ctx.get("clock_warning")
+                }
             return {
                 "valid": False,
                 "status": "connection_error",
@@ -395,6 +404,14 @@ class PampaClient:
             }
 
         except requests.exceptions.ConnectionError:
+            if _offline_limit_ctx:
+                return {
+                    "valid": False,
+                    "status": "offline_limit",
+                    "message": f"Se superó el límite de {_offline_limit_ctx['limit']} horas sin conexión. Conéctate a internet para continuar.",
+                    "used_cache": True,
+                    "clock_warning": _offline_limit_ctx.get("clock_warning")
+                }
             return {
                 "valid": False,
                 "status": "connection_error",
@@ -403,6 +420,14 @@ class PampaClient:
             }
 
         except Exception as e:
+            if _offline_limit_ctx:
+                return {
+                    "valid": False,
+                    "status": "offline_limit",
+                    "message": f"Se superó el límite de {_offline_limit_ctx['limit']} horas sin conexión. Conéctate a internet para continuar.",
+                    "used_cache": True,
+                    "clock_warning": _offline_limit_ctx.get("clock_warning")
+                }
             return {
                 "valid": False,
                 "status": "error",
