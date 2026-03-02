@@ -3186,7 +3186,14 @@ class WelcomeXApp(ctk.CTk):
         x = (d.winfo_screenwidth() // 2) - 450
         y = (d.winfo_screenheight() // 2) - 350
         d.geometry(f"900x700+{x}+{y}")
-        
+
+        # Botones finales — deben empaquetarse ANTES del frame principal para que side="bottom" funcione
+        btn_final = ctk.CTkFrame(d, fg_color=COLORS["sidebar"], corner_radius=0)
+        btn_final.pack(fill="x", side="bottom", padx=0, pady=0)
+
+        btn_inner = ctk.CTkFrame(btn_final, fg_color="transparent")
+        btn_inner.pack(fill="x", padx=30, pady=15)
+
         main = ctk.CTkFrame(d, fg_color=COLORS["bg"])
         main.pack(fill="both", expand=True, padx=30, pady=30)
         
@@ -3308,13 +3315,6 @@ class WelcomeXApp(ctk.CTk):
             else:
                 self.mostrar_mensaje("Error", f"Error: {resultado['error']}", "error")
         
-        # Botones finales — fijados al fondo del diálogo
-        btn_final = ctk.CTkFrame(d, fg_color=COLORS["sidebar"], corner_radius=0)
-        btn_final.pack(fill="x", side="bottom", padx=0, pady=0)
-
-        btn_inner = ctk.CTkFrame(btn_final, fg_color="transparent")
-        btn_inner.pack(fill="x", padx=30, pady=15)
-
         ctk.CTkButton(btn_inner, text="💾 Guardar Configuración",
                      command=guardar_todos,
                      height=65, font=("Arial", 16, "bold"),

@@ -88,6 +88,10 @@ class KioscoWindow(ctk.CTkToplevel):
         self.velocidad_teclas = []
         self.keyboard_listener = None
 
+        # Modo escritura: cuando el panel del operador tiene el foco en el buscador
+        self.typing_mode = False
+        self.operator_panel_ref = None
+
         # Último invitado acreditado (para repetir con F5 o re-scan)
         self.ultimo_invitado_acreditado = None
         self.ultimo_video_acreditado = None
@@ -874,6 +878,19 @@ class KioscoWindow(ctk.CTkToplevel):
             elif key == keyboard.Key.f5:
                 self.after(0, self.repetir_ultima_acreditacion)
                 return
+
+            # Modo escritura: redirigir teclas al buscador del panel operador
+            if self.typing_mode and self.operator_panel_ref:
+                try:
+                    if hasattr(key, 'char') and key.char and key.char.isprintable():
+                        current = self.operator_panel_ref.search_var.get()
+                        self.operator_panel_ref.search_var.set(current + key.char)
+                    elif key == keyboard.Key.backspace:
+                        current = self.operator_panel_ref.search_var.get()
+                        self.operator_panel_ref.search_var.set(current[:-1])
+                except Exception:
+                    pass
+                return  # No procesar como QR
 
             # Capturar carácter
             if hasattr(key, 'char') and key.char and key.char.isprintable():

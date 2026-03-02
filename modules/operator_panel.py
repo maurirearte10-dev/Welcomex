@@ -70,11 +70,16 @@ class OperatorPanel(ctk.CTkToplevel):
         self.search_var = ctk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._filtrar())
 
-        ctk.CTkEntry(search_frame,
+        search_entry = ctk.CTkEntry(search_frame,
                      textvariable=self.search_var,
                      placeholder_text="🔍  Buscar por nombre o apellido...",
                      height=40, font=("Segoe UI", 13),
-                     fg_color=COLORS["card"]).pack(fill="x")
+                     fg_color=COLORS["card"])
+        search_entry.pack(fill="x")
+
+        # Al enfocar el buscador, redirigir teclado del kiosco aquí
+        search_entry.bind("<FocusIn>",  lambda e: self._set_typing_mode(True))
+        search_entry.bind("<FocusOut>", lambda e: self._set_typing_mode(False))
 
         # ── Filtro estado ────────────────────────────────────────────
         filter_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -128,6 +133,14 @@ class OperatorPanel(ctk.CTkToplevel):
                                          fg_color=COLORS["primary"],
                                          state="disabled")
         self.btn_repetir.pack(side="left", fill="x", expand=True)
+
+    def _set_typing_mode(self, active):
+        """Activa/desactiva el modo escritura en el kiosco para redirigir teclas al buscador."""
+        if self.kiosco:
+            self.kiosco.typing_mode = active
+            self.kiosco.operator_panel_ref = self if active else None
+            if active:
+                self.kiosco.qr_buffer = ""  # Limpiar buffer QR al empezar a escribir
 
     # ------------------------------------------------------------------
     # Datos y refresco
