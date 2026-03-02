@@ -1357,7 +1357,7 @@ class WelcomeXApp(ctk.CTk):
                                 fg_color="transparent", border_width=1,
                                 border_color=COLORS["danger"],
                                 text_color=COLORS["danger"],
-                                hover_color=COLORS["danger"] + "20").pack(pady=(10, 0))
+                                hover_color="#2d1a1a").pack(pady=(10, 0))
             else:
                 ctk.CTkLabel(lic_inner, text=f"❌ {t('config.license_expired')}",
                             font=("Arial", 15), text_color=COLORS["danger"]).pack(anchor="w")
@@ -5432,7 +5432,7 @@ class WelcomeXApp(ctk.CTk):
                     justify="center", wraplength=450).pack(pady=(0, 30))
 
         # Info box
-        info_frame = ctk.CTkFrame(inner, fg_color=COLORS["warning"] + "20", corner_radius=10)
+        info_frame = ctk.CTkFrame(inner, fg_color="#2d2a1a", corner_radius=10)
         info_frame.pack(fill="x", pady=(0, 25))
         info_inner = ctk.CTkFrame(info_frame, fg_color="transparent")
         info_inner.pack(padx=20, pady=15)
