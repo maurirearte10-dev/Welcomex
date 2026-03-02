@@ -68,7 +68,8 @@ class OperatorPanel(ctk.CTkToplevel):
         search_frame.pack(fill="x", padx=14, pady=(10, 4))
 
         self.search_var = ctk.StringVar()
-        self.search_var.trace_add("write", lambda *_: self._filtrar())
+        self._debounce_filtro = None
+        self.search_var.trace_add("write", self._on_search_change)
 
         search_entry = ctk.CTkEntry(search_frame,
                      textvariable=self.search_var,
@@ -171,6 +172,15 @@ class OperatorPanel(ctk.CTkToplevel):
         total     = len(self._todos)
         presentes = sum(1 for i in self._todos if i.get('presente'))
         self.lbl_stats.configure(text=f"✅ {presentes} / {total}")
+
+    def _on_search_change(self, *_):
+        """Debounce 200ms para no reconstruir la lista en cada tecla."""
+        if self._debounce_filtro:
+            try:
+                self.after_cancel(self._debounce_filtro)
+            except Exception:
+                pass
+        self._debounce_filtro = self.after(200, self._filtrar)
 
     def _filtrar(self):
         texto  = self.search_var.get().strip().lower()

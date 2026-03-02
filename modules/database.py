@@ -197,8 +197,14 @@ class DatabaseManager:
             )
         ''')
 
+        # Índices para mejorar rendimiento con eventos grandes (200+ invitados)
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_evento   ON invitados(evento_id)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_qr       ON invitados(qr_code)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_inv_nombre   ON invitados(evento_id, apellido, nombre)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_acred_evento ON acreditaciones(evento_id)")
+
         self.connection.commit()
-        
+
         # MIGRACIONES: Agregar columnas faltantes si no existen
         try:
             # Verificar si existe columna kiosco_acreditador en invitados
@@ -645,6 +651,39 @@ class DatabaseManager:
         finally:
             self.disconnect()
     
+    def insertar_invitados_bulk(self, evento_id, filas):
+        """Insertar múltiples invitados en una sola transacción.
+        filas: list of (nombre, apellido, mesa, observaciones)
+        Devuelve {"success": True, "insertados": N, "qr_codes": [...]}
+        """
+        self.connect()
+        try:
+            ahora = datetime.now().isoformat()
+            rows = []
+            qr_codes = []
+            for nombre, apellido, mesa, observaciones in filas:
+                qr = f"EVT{evento_id}-{uuid.uuid4().hex[:8].upper()}"
+                qr_codes.append(qr)
+                rows.append((evento_id, qr, nombre, apellido, mesa,
+                             observaciones, None, None, None, 0, 0, ahora))
+            self.cursor.executemany("""
+                INSERT INTO invitados
+                    (evento_id, qr_code, nombre, apellido, mesa,
+                     observaciones, video_personalizado, email, telefono,
+                     acompanantes, presente, fecha_registro)
+                VALUES (?,?,?,?,?,?,?,?,?,?,0,?)
+            """, rows)
+            self.connection.commit()
+            return {"success": True, "insertados": len(rows), "qr_codes": qr_codes}
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except Exception:
+                pass
+            return {"success": False, "error": str(e)}
+        finally:
+            self.disconnect()
+
     def obtener_invitados_evento(self, evento_id):
         """Obtener todos los invitados de un evento"""
         self.connect()
