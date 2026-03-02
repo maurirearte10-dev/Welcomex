@@ -393,8 +393,9 @@ class KioscoWindow(ctk.CTkToplevel):
 
         if not invitado:
             print(f"[ERROR] ❌ Invitado NO encontrado en BD")
+            print(f"[DEBUG] Código recibido (repr): {repr(qr_code)}")
             self._beep("error")
-            self.mostrar_overlay("❌ QR NO REGISTRADO", "#ef4444", 3000)
+            self.mostrar_overlay(f"❌ QR NO REGISTRADO\n{qr_code}", "#ef4444", 4000)
             return
 
         # Invitado encontrado
