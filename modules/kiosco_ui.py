@@ -672,15 +672,43 @@ class KioscoWindow(ctk.CTkToplevel):
     # ── Acciones ─────────────────────────────────────────────────────────────
 
     def minimizar_kiosco(self):
-        """Minimiza el kiosco a la barra de tareas"""
-        self.attributes('-fullscreen', False)
-        self.iconify()
-        # Al restaurar, volver a fullscreen
-        self.bind('<Map>', self._restaurar_fullscreen)
+        """Toggle: achica a 3/4 flotante o restaura a fullscreen"""
+        if not getattr(self, '_kiosco_minimizado', False):
+            # Achicar a 3/4 de la pantalla del monitor donde está el kiosco
+            mx, my, mw, mh = _get_secondary_monitor()
+            w, h = mw * 3 // 4, mh * 3 // 4
+            x, y = mx + mw - w - 10, my + mh - h - 50
+            self.attributes('-fullscreen', False)
+            self.overrideredirect(True)
+            self.geometry(f"{w}x{h}+{x}+{y}")
+            self.attributes('-topmost', True)
+            self._kiosco_minimizado = True
+            # Actualizar ícono del botón
+            if hasattr(self, '_ctrl_buttons') and len(self._ctrl_buttons) > 1:
+                self._ctrl_buttons[1].configure(text="⛶")
+            # Habilitar drag
+            self._drag_x = 0
+            self._drag_y = 0
+            self.bind('<Button-1>', self._drag_start)
+            self.bind('<B1-Motion>', self._drag_move)
+        else:
+            # Restaurar a fullscreen
+            self.unbind('<Button-1>')
+            self.unbind('<B1-Motion>')
+            self.overrideredirect(False)
+            self.attributes('-topmost', False)
+            self.attributes('-fullscreen', True)
+            self._kiosco_minimizado = False
+            if hasattr(self, '_ctrl_buttons') and len(self._ctrl_buttons) > 1:
+                self._ctrl_buttons[1].configure(text="⊟")
 
-    def _restaurar_fullscreen(self, event=None):
-        self.unbind('<Map>')
-        self.after(150, lambda: self.attributes('-fullscreen', True))
+    def _drag_start(self, event):
+        self._drag_x = event.x_root - self.winfo_x()
+        self._drag_y = event.y_root - self.winfo_y()
+
+    def _drag_move(self, event):
+        if getattr(self, '_kiosco_minimizado', False):
+            self.geometry(f"+{event.x_root - self._drag_x}+{event.y_root - self._drag_y}")
 
     def _reabrir_panel_operador(self):
         """F2 — reabre el panel del operador si fue cerrado, o lo trae al frente"""
