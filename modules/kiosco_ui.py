@@ -754,10 +754,15 @@ class KioscoWindow(ctk.CTkToplevel):
             temp_media = self.vlc_instance.media_new(video_path)
             temp_media.add_option('input-repeat=0')  # Sobreescribir el repeat=65535 del instance
             self.vlc_player.set_media(temp_media)
-            self.vlc_player.play()
-            print(f"[KIOSCO] Video temporal VLC iniciado (mismo player, sin ventana nueva)")
 
-            # Monitorear cuando termine
+            # Registrar evento de fin (más confiable que polling puro)
+            em = self.vlc_player.event_manager()
+            em.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_video_temporal_end_event)
+
+            self.vlc_player.play()
+            print(f"[KIOSCO] Video temporal VLC iniciado")
+
+            # Backup poll por si el evento VLC no dispara
             self.after(500, self._check_video_temporal_end)
 
         except Exception as e:
@@ -765,24 +770,38 @@ class KioscoWindow(ctk.CTkToplevel):
             self._video_temporal_activo = False
             self._reproducir_video_temporal_opencv(video_path)
 
+    def _on_video_temporal_end_event(self, event):
+        """VLC llama esto desde su hilo interno — delegar a hilo Tkinter con after(0)"""
+        self.after(0, self._finalizar_video_temporal)
+
+    def _finalizar_video_temporal(self):
+        """Punto central de fin del video temporal — siempre ejecutado en hilo Tkinter"""
+        if not self._video_temporal_activo:
+            return  # ya manejado (evita doble disparo entre evento y poll)
+        try:
+            em = self.vlc_player.event_manager()
+            em.event_detach(vlc.EventType.MediaPlayerEndReached, self._on_video_temporal_end_event)
+        except Exception:
+            pass
+        print(f"[KIOSCO] Video temporal finalizado")
+        self._video_temporal_activo = False
+        self._mostrar_overlay_bienvenida()
+
     def _check_video_temporal_end(self):
-        """Verificar si video temporal terminó"""
+        """Backup poll por si el evento VLC MediaPlayerEndReached no dispara"""
         try:
             if not self._video_temporal_activo or not self.vlc_player:
                 return
 
             state = self.vlc_player.get_state()
 
-            if state == vlc.State.Ended or state == vlc.State.Stopped or state == vlc.State.Error:
-                print(f"[KIOSCO] Video temporal finalizado")
-                self._video_temporal_activo = False
-                self._mostrar_overlay_bienvenida()
+            if state in (vlc.State.Ended, vlc.State.Stopped, vlc.State.Error):
+                self._finalizar_video_temporal()
             else:
-                self.after(300, self._check_video_temporal_end)
+                self.after(500, self._check_video_temporal_end)
         except Exception as e:
             print(f"[ERROR] Error verificando video temporal: {e}")
-            self._video_temporal_activo = False
-            self._mostrar_overlay_bienvenida()
+            self._finalizar_video_temporal()
 
     def _mostrar_overlay_bienvenida(self):
         """Mostrar overlay de bienvenida después del video"""
@@ -871,7 +890,6 @@ class KioscoWindow(ctk.CTkToplevel):
         if self.video_activo:
             if hasattr(self, 'vlc_player') and self.vlc_player and self.vlc_instance:
                 try:
-                    # Recargar el media de loop (el video temporal lo reemplazó)
                     self.vlc_media = self.vlc_instance.media_new(self.video_path)
                     self.vlc_media.add_option('input-repeat=65535')
                     self.vlc_player.set_media(self.vlc_media)
