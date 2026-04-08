@@ -1663,6 +1663,7 @@ class WelcomeXApp(ctk.CTk):
                 licencias = resultado_online.get("licencias", [])
 
                 # Crear/actualizar usuario en BD local
+                local_id = None
                 db.connect()
                 try:
                     db.cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
@@ -1698,7 +1699,7 @@ class WelcomeXApp(ctk.CTk):
 
                 # Establecer usuario actual con datos de PAMPA
                 self.usuario_actual = {
-                    "id": local_id if 'local_id' in dir() else user_data.get('id'),
+                    "id": local_id if local_id is not None else user_data.get('id'),
                     "pampa_id": user_data.get('id'),
                     "email": user_data.get('email'),
                     "nombre": user_data.get('nombre', ''),
@@ -3024,7 +3025,7 @@ class WelcomeXApp(ctk.CTk):
                               fg_color=COLORS["card"], placeholder_text="Sin video")
         e_video.pack(side="left", fill="x", expand=True)
         if evento.get('video_loop'):
-            e_video.insert(0, evento['video_loop'])
+            e_video.insert(0, evento.get('video_loop', ''))
         
         def seleccionar_video():
             filepath = filedialog.askopenfilename(
@@ -3674,7 +3675,11 @@ class WelcomeXApp(ctk.CTk):
             if not mesa.isdigit():
                 self.mostrar_mensaje("Error", "Mesa debe ser un número", "error")
                 return
-            
+
+            if int(mesa) < 1:
+                self.mostrar_mensaje("Error", "El número de mesa debe ser 1 o mayor", "error")
+                return
+
             resultado = db.agregar_invitado(
                 evento_id=self.evento_activo['id'],
                 nombre=nombre,
@@ -3740,8 +3745,8 @@ class WelcomeXApp(ctk.CTk):
         ctk.CTkLabel(scroll, text="Mesa *", anchor="w", font=("Arial", 13)).pack(fill="x")
         e_mesa = ctk.CTkEntry(scroll, height=45, font=("Arial", 14), fg_color=COLORS["card"])
         e_mesa.pack(fill="x", pady=(8, 12))
-        if invitado.get('mesa'):
-            e_mesa.insert(0, str(invitado['mesa']))
+        if invitado.get('mesa') is not None:
+            e_mesa.insert(0, str(invitado.get('mesa', '')))
         
         # Observaciones
         ctk.CTkLabel(scroll, text="Observaciones", anchor="w", font=("Arial", 13)).pack(fill="x")
@@ -3787,7 +3792,11 @@ class WelcomeXApp(ctk.CTk):
             if not mesa.isdigit():
                 self.mostrar_mensaje("Error", "Mesa debe ser un número", "error")
                 return
-            
+
+            if int(mesa) < 1:
+                self.mostrar_mensaje("Error", "El número de mesa debe ser 1 o mayor", "error")
+                return
+
             # Actualizar invitado
             db.connect()
             try:
@@ -5759,8 +5768,8 @@ class WelcomeXApp(ctk.CTk):
             db.connection.commit()
             print(f"[WelcomeX] ✅ Trial demo iniciado: {fecha_inicio} (machine: {self.machine_id[:8]}...)")
         except Exception as e:
-            print(f"[WelcomeX] ❌ Error al iniciar trial: {e}")
-        finally:
+
+Q650YbKSbUuu8sSy7RKjGvw0OWh8ornvoLsPkTZPI2Dmjjcl#Juw3S-PdEbpYMdSTL4WQ6bNBw-Yjnwh4RfpxVPDpxe4        finally:
             db.disconnect()
 
     def mostrar_opciones_inicio(self):
