@@ -2,7 +2,7 @@
 ; Instalador profesional con acceso directo, desinstalador y todo incluido
 
 #define MyAppName "WelcomeX"
-#define MyAppVersion "1.5.28"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Pampa Guazú"
 #define MyAppURL "https://pampaguazu.com.ar"
 #define MyAppExeName "WelcomeX.exe"
@@ -16,7 +16,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 LicenseFile=LICENSE.txt
@@ -29,7 +29,6 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 CloseApplications=force
 RestartApplications=no
 
