@@ -3537,7 +3537,7 @@ class WelcomeXApp(ctk.CTk):
             stats_label.configure(text=stats_text)
             
             # Mostrar invitados filtrados (máximo 200 para no trabar la UI)
-            MAX_FILAS = 50
+            MAX_FILAS = 500
             if not invitados_filtrados:
                 ctk.CTkLabel(lista_frame,
                             text="No se encontraron invitados con esos criterios.",
@@ -3547,7 +3547,7 @@ class WelcomeXApp(ctk.CTk):
                     self.crear_card_invitado(inv, lista_frame)
                 if total_filtrados > MAX_FILAS:
                     ctk.CTkLabel(lista_frame,
-                                text=f"Mostrando {MAX_FILAS} de {total_filtrados} — usá el buscador para filtrar",
+                                text=f"Mostrando primeros {MAX_FILAS} de {total_filtrados} — usá el buscador para filtrar",
                                 font=("Arial", 12), text_color=COLORS["text_light"]).pack(pady=10)
 
         # Debounce en el buscador: esperar 300ms después de la última tecla
@@ -3556,7 +3556,7 @@ class WelcomeXApp(ctk.CTk):
         def _on_search_change(*args):
             if _debounce_job[0]:
                 lista_frame.after_cancel(_debounce_job[0])
-            _debounce_job[0] = lista_frame.after(300, actualizar_lista)
+            _debounce_job[0] = lista_frame.after(500, actualizar_lista)
 
         # Conectar búsqueda y filtros
         search_var.trace_add('write', _on_search_change)
