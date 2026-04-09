@@ -147,10 +147,22 @@ class WelcomeXApp(ctk.CTk):
         self.geometry(f"{width}x{height}+{x}+{y}")
         self.minsize(width, height)  # Mínimo = lo que calculamos, nunca mayor a la pantalla
 
-        # Icono de la ventana
+        # Icono de la ventana (título + barra de tareas)
+        try:
+            import ctypes
+            # AppUserModelID — necesario para que Windows muestre el ícono correcto en la barra de tareas
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("PampaGuazu.WelcomeX.1.0")
+        except Exception:
+            pass
         try:
             icon_path = os.path.join(RESOURCE_DIR, "assets", "icon.ico")
             self.iconbitmap(icon_path)
+            # iconphoto también para mayor compatibilidad con Windows 11
+            from PIL import Image, ImageTk
+            img = Image.open(icon_path)
+            img = img.resize((32, 32), Image.LANCZOS)
+            self._icon_photo = ImageTk.PhotoImage(img)
+            self.wm_iconphoto(True, self._icon_photo)
         except Exception as e:
             print(f"[INFO] No se pudo cargar el icono: {e}")
 
@@ -1670,6 +1682,24 @@ class WelcomeXApp(ctk.CTk):
                     "rol": user_data.get('rol', 'cliente'),
                     "licencias": licencias
                 }
+
+                # Auto-activar licencia WelcomeX si viene en la respuesta y no está activada localmente
+                if not self.cargar_license_key():
+                    lic_wx = next(
+                        (l for l in licencias
+                         if "welcome" in (l.get("programa") or "").lower()
+                         and l.get("estado") == "active"),
+                        None
+                    )
+                    if lic_wx:
+                        try:
+                            result = self.pampa.validate_license(lic_wx["license_key"], force_online=True)
+                            if result.get("valid"):
+                                self.guardar_license_key(lic_wx["license_key"])
+                                print(f"[LOGIN] Licencia WelcomeX auto-activada: {lic_wx['license_key']}")
+                        except Exception as e:
+                            print(f"[LOGIN] Error auto-activando licencia: {e}")
+
                 self.mostrar_principal()
             else:
                 # Error online - intentar local como fallback
