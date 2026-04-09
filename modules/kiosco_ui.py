@@ -711,22 +711,8 @@ class KioscoWindow(ctk.CTkToplevel):
             self.geometry(f"+{event.x_root - self._drag_x}+{event.y_root - self._drag_y}")
 
     def _reabrir_panel_operador(self):
-        """F2 — reabre el panel del operador si fue cerrado, o lo trae al frente"""
-        from modules.operator_panel import OperatorPanel
-        try:
-            if self.operator_panel_ref and self.operator_panel_ref.winfo_exists():
-                self.operator_panel_ref.deiconify()
-                self.operator_panel_ref.lift()
-                return
-        except Exception:
-            pass
-        # Panel cerrado o inválido — recrear
-        try:
-            panel = OperatorPanel(self.master, self.evento, kiosco_window=self)
-            self.operator_panel_ref = panel
-            print(f"[KIOSCO] Panel operador reabierto con F2")
-        except Exception as e:
-            print(f"[KIOSCO] Error reabriendo panel: {e}")
+        """F2 — el panel operador ahora es inline en la ventana principal, no hay ventana flotante"""
+        print(f"[KIOSCO] F2: panel operador es inline en ventana principal")
 
     def repetir_ultima_acreditacion(self):
         """F5 — repite el video/overlay del último invitado acreditado"""
@@ -1010,12 +996,14 @@ class KioscoWindow(ctk.CTkToplevel):
             # Modo escritura: redirigir teclas al buscador del panel operador
             if self.typing_mode and self.operator_panel_ref:
                 try:
-                    if hasattr(key, 'char') and key.char and key.char.isprintable():
-                        current = self.operator_panel_ref.search_var.get()
-                        self.operator_panel_ref.search_var.set(current + key.char)
-                    elif key == keyboard.Key.backspace:
-                        current = self.operator_panel_ref.search_var.get()
-                        self.operator_panel_ref.search_var.set(current[:-1])
+                    # Soporta tanto OperatorPanel (search_var) como panel inline (_op_search_var)
+                    sv = getattr(self.operator_panel_ref, 'search_var', None) or \
+                         getattr(self.operator_panel_ref, '_op_search_var', None)
+                    if sv is not None:
+                        if hasattr(key, 'char') and key.char and key.char.isprintable():
+                            sv.set(sv.get() + key.char)
+                        elif key == keyboard.Key.backspace:
+                            sv.set(sv.get()[:-1])
                 except Exception:
                     pass
                 return  # No procesar como QR

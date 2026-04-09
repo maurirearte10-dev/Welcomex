@@ -2336,7 +2336,8 @@ class WelcomeXApp(ctk.CTk):
         ctk.CTkLabel(sidebar, text="WelcomeX", font=("Arial", 30, "bold"),
                     text_color=COLORS["primary"]).pack(pady=(35, 15))
         
-        ctk.CTkLabel(sidebar, text=f"👤 {self.usuario_actual['nombre']} {self.usuario_actual.get('apellido', '')}",
+        nombre_user = f"{(self.usuario_actual or {}).get('nombre', '')} {(self.usuario_actual or {}).get('apellido', '')}".strip() or "Usuario"
+        ctk.CTkLabel(sidebar, text=f"👤 {nombre_user}",
                     font=("Arial", 12), text_color=COLORS["text_light"]).pack(pady=(0, 10))
         
         # Menú simplificado - sin roles
@@ -4370,6 +4371,8 @@ class WelcomeXApp(ctk.CTk):
         self._op_refresh_job = self.after(2000, self._op_refresh)
 
     def _op_on_datos(self, nuevos):
+        if not hasattr(self, '_op_list_frame'):
+            return
         nuevo_hash = str([(i['id'], i.get('presente')) for i in nuevos])
         if nuevo_hash != self._op_hash:
             self._op_todos = nuevos
@@ -4380,7 +4383,10 @@ class WelcomeXApp(ctk.CTk):
                 self._op_lbl_stats.configure(text=f"✅ {presentes} / {total}")
             except Exception:
                 pass
-            self._op_filtrar()
+            try:
+                self._op_filtrar()
+            except Exception:
+                pass
 
     def _op_on_search(self, *_):
         if self._op_debounce:
@@ -4391,7 +4397,7 @@ class WelcomeXApp(ctk.CTk):
         self._op_debounce = self.after(200, self._op_filtrar)
 
     def _op_filtrar(self):
-        if not hasattr(self, '_op_search_var'):
+        if not hasattr(self, '_op_search_var') or not hasattr(self, '_op_filtro_var') or not hasattr(self, '_op_list_frame'):
             return
         texto  = self._op_search_var.get().strip().lower()
         filtro = self._op_filtro_var.get()
@@ -4409,6 +4415,8 @@ class WelcomeXApp(ctk.CTk):
         self._op_pintar_lista(resultado)
 
     def _op_pintar_lista(self, invitados):
+        if not hasattr(self, '_op_list_frame'):
+            return
         MAX = 150
         visibles = invitados[:MAX]
         lf = self._op_list_frame
