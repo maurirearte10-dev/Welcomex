@@ -44,6 +44,10 @@ class OperatorPanel(ctk.CTkToplevel):
         self.resizable(True, True)
         self.configure(fg_color=COLORS["bg"])
 
+        # Siempre al frente, sin bloquear el foco en otras ventanas
+        self.attributes("-topmost", True)
+        self.wm_attributes("-topmost", True)
+
         self.update_idletasks()
         sw = self.winfo_screenwidth()
         self.geometry(f"+{sw - 440}+20")

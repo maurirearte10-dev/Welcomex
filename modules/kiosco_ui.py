@@ -777,13 +777,29 @@ class KioscoWindow(ctk.CTkToplevel):
             # Marcar que estamos en modo temporal para que check_video_loop no interfiera
             self._video_temporal_activo = True
 
+            # Desconectar listener anterior si quedó colgado
+            try:
+                em = self.vlc_player.event_manager()
+                em.event_detach(vlc.EventType.MediaPlayerEndReached, self._on_video_temporal_end_event)
+            except Exception:
+                pass
+
+            # Liberar media anterior si existe
+            if hasattr(self, '_temp_media_ref') and self._temp_media_ref:
+                try:
+                    self._temp_media_ref.release()
+                except Exception:
+                    pass
+                self._temp_media_ref = None
+
             # Detener el loop actual y cargar el video de mesa SIN repetición
             self.vlc_player.stop()
             temp_media = self.vlc_instance.media_new(video_path)
-            temp_media.add_option('input-repeat=0')  # Sobreescribir el repeat=65535 del instance
+            temp_media.add_option('input-repeat=0')
+            self._temp_media_ref = temp_media  # guardar referencia para liberar después
             self.vlc_player.set_media(temp_media)
 
-            # Registrar evento de fin (más confiable que polling puro)
+            # Registrar evento de fin
             em = self.vlc_player.event_manager()
             em.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_video_temporal_end_event)
 
@@ -811,6 +827,13 @@ class KioscoWindow(ctk.CTkToplevel):
             em.event_detach(vlc.EventType.MediaPlayerEndReached, self._on_video_temporal_end_event)
         except Exception:
             pass
+        # Liberar media temporal
+        if hasattr(self, '_temp_media_ref') and self._temp_media_ref:
+            try:
+                self._temp_media_ref.release()
+            except Exception:
+                pass
+            self._temp_media_ref = None
         print(f"[KIOSCO] Video temporal finalizado")
         self._video_temporal_activo = False
         self._mostrar_overlay_bienvenida()

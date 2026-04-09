@@ -180,9 +180,6 @@ class WelcomeXApp(ctk.CTk):
             self.after(3000, self._verificar_reloj_startup)
             # Licencia válida → Login normal
             self.mostrar_login()
-        elif license_status == "demo_active":
-            # Trial demo activo → Login con usuario demo
-            self.mostrar_login_demo()
         elif license_status == "requires_connection":
             # Requiere conexión a internet (offline >48h o migración)
             self.mostrar_requiere_conexion()
@@ -190,8 +187,8 @@ class WelcomeXApp(ctk.CTk):
             # Licencia fue activada en otra PC
             self.mostrar_hardware_reemplazado()
         else:
-            # Sin licencia ni trial → Mostrar opciones
-            self.mostrar_opciones_inicio()
+            # Sin licencia → Login (con opción de activar)
+            self.mostrar_login()
 
         # Chequear actualizaciones en background (no bloquea el inicio)
         self.after(2000, self._check_for_updates)
@@ -751,7 +748,7 @@ class WelcomeXApp(ctk.CTk):
             return False
         try:
             fecha_inicio = datetime.fromisoformat(data['started'])
-            return datetime.now() > fecha_inicio + timedelta(days=7)
+            return datetime.now() > fecha_inicio + timedelta(days=3)
         except:
             return False
 
@@ -811,42 +808,8 @@ class WelcomeXApp(ctk.CTk):
         return self.usuario_actual and self.usuario_actual.get('es_demo', False)
     
     def validar_accion_escritura(self, nombre_accion="esta acción"):
-        """Validar si puede hacer acciones de escritura (bloquea modo demo excepto acciones demo)"""
-        if self.es_modo_demo():
-            # Acciones PERMITIDAS en modo demo (para probar el sistema)
-            acciones_permitidas_demo = [
-                "iniciar eventos",
-                "pausar eventos",
-                "finalizar eventos",
-                "realizar sorteos",
-                # Kiosco acredita/desacredita (permitido)
-            ]
-
-            if nombre_accion in acciones_permitidas_demo:
-                return True
-
-            # Caso especial: generar invitaciones permitido hasta 3 VECES por máquina
-            if nombre_accion == "generar invitaciones":
-                restantes = db.demo_invitaciones_restantes(self.machine_id)
-                if restantes > 0:
-                    # Incrementar contador
-                    db.incrementar_demo_invitaciones(self.machine_id)
-                    restantes -= 1
-                    self.mostrar_mensaje(f"🎨 {t('demo.demo_title')}",
-                                        t("demo.invitations_allowed_count", remaining=restantes),
-                                        "info")
-                    return True
-                else:
-                    self.mostrar_mensaje(f"🎭 {t('demo.mode_label')}",
-                                        t("demo.invitations_used"),
-                                        "warning")
-                    return False
-
-            # Resto de acciones BLOQUEADAS (crear, editar, eliminar, exportar)
-            self.mostrar_mensaje(f"🎭 {t('demo.mode_label')}",
-                                t("demo.blocked_action", action=nombre_accion),
-                                "warning")
-            return False
+        """Validar si puede hacer acciones de escritura — demo tiene acceso completo por 3 días"""
+        # En modo demo se permite todo (el acceso expira a los 3 días)
         return True
     
     def limpiar_ventana(self):
@@ -1571,23 +1534,23 @@ class WelcomeXApp(ctk.CTk):
         self.mostrar_selector_idioma(frame)
 
         # Logo
-        ctk.CTkLabel(frame, text=t("app.title"), font=("Arial", 48, "bold"),
-                    text_color=COLORS["primary"]).pack(pady=(30, 10))
+        ctk.CTkLabel(frame, text=t("app.title"), font=("Arial", 40, "bold"),
+                    text_color=COLORS["primary"]).pack(pady=(15, 5))
         ctk.CTkLabel(frame, text=t("app.subtitle"),
-                    font=("Arial", 16), text_color=COLORS["text_light"]).pack(pady=(0, 50))
+                    font=("Arial", 14), text_color=COLORS["text_light"]).pack(pady=(0, 20))
 
         # Email
         ctk.CTkLabel(frame, text=t("login.email"), anchor="w", font=("Arial", 13)).pack(fill="x", padx=50)
-        entry_email = ctk.CTkEntry(frame, width=450, height=50, font=("Arial", 15),
+        entry_email = ctk.CTkEntry(frame, width=450, height=45, font=("Arial", 15),
                                    fg_color=COLORS["card"], border_color=COLORS["border"])
-        entry_email.pack(pady=(8, 20), padx=50)
+        entry_email.pack(pady=(5, 12), padx=50)
 
         # Password con toggle mostrar/ocultar
         ctk.CTkLabel(frame, text=t("login.password"), anchor="w", font=("Arial", 13)).pack(fill="x", padx=50)
         pass_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        pass_frame.pack(fill="x", padx=50, pady=(8, 10))
+        pass_frame.pack(fill="x", padx=50, pady=(5, 5))
 
-        entry_pass = ctk.CTkEntry(pass_frame, width=400, height=50, show="●", font=("Arial", 15),
+        entry_pass = ctk.CTkEntry(pass_frame, width=400, height=45, show="●", font=("Arial", 15),
                                  fg_color=COLORS["card"], border_color=COLORS["border"])
         entry_pass.pack(side="left")
 
@@ -1603,7 +1566,7 @@ class WelcomeXApp(ctk.CTk):
                 entry_pass.configure(show="●")
                 btn_eye.configure(text="👁")
 
-        btn_eye = ctk.CTkButton(pass_frame, text="👁", width=45, height=50,
+        btn_eye = ctk.CTkButton(pass_frame, text="👁", width=45, height=45,
                                fg_color=COLORS["card"], hover_color=COLORS["border"],
                                command=toggle_password, font=("Arial", 16))
         btn_eye.pack(side="left", padx=(5, 0))
@@ -1618,7 +1581,7 @@ class WelcomeXApp(ctk.CTk):
             fg_color=COLORS["primary"],
             hover_color=COLORS["primary"]
         )
-        remember_check.pack(pady=(0, 5), padx=50, anchor="w")
+        remember_check.pack(pady=(0, 2), padx=50, anchor="w")
 
         # Cargar credenciales guardadas
         saved_email = db.get_config("remember_email")
@@ -1631,10 +1594,10 @@ class WelcomeXApp(ctk.CTk):
         # Botón "Olvidé mi contraseña"
         btn_olvide = ctk.CTkButton(frame, text=t("login.forgot_password"),
                                     command=lambda: self.mostrar_recuperar_password(entry_email.get()),
-                                    width=450, height=35, font=("Arial", 12),
+                                    width=450, height=30, font=("Arial", 12),
                                     fg_color="transparent", text_color=COLORS["primary"],
                                     hover_color=COLORS["card"])
-        btn_olvide.pack(pady=(0, 25), padx=50)
+        btn_olvide.pack(pady=(0, 12), padx=50)
 
         def login():
             email = entry_email.get().strip()
@@ -1726,20 +1689,22 @@ class WelcomeXApp(ctk.CTk):
         entry_pass.bind('<Return>', lambda e: login())
         
         # Botones
-        ctk.CTkButton(frame, text=t("login.sign_in"), command=login, width=450, height=55,
-                     font=("Arial", 17, "bold"), fg_color=COLORS["primary"],
-                     hover_color="#2563eb").pack(pady=15)
-        
+        ctk.CTkButton(frame, text=t("login.sign_in"), command=login, width=450, height=50,
+                     font=("Arial", 16, "bold"), fg_color=COLORS["primary"],
+                     hover_color="#2563eb").pack(pady=10)
+
         ctk.CTkButton(frame, text=t("login.create_account"), command=self.mostrar_registro,
-                     width=450, height=50, font=("Arial", 15),
+                     width=450, height=45, font=("Arial", 14),
                      fg_color="transparent", border_width=2,
-                     border_color=COLORS["border"]).pack(pady=10)
-        
-        # Botón modo demo
-        ctk.CTkButton(frame, text=f"🎭 {t('login.demo_mode')}", command=self.iniciar_modo_demo,
-                     width=200, height=40, font=("Arial", 13),
-                     fg_color=COLORS["warning"]).pack(pady=20)
-    
+                     border_color=COLORS["border"]).pack(pady=5)
+
+        ctk.CTkButton(frame, text="🔑 Activar licencia",
+                     command=self.mostrar_opciones_inicio,
+                     width=450, height=35, font=("Arial", 13),
+                     fg_color="transparent", text_color=COLORS["text_light"],
+                     hover_color=COLORS["card"]).pack(pady=(5, 15))
+
+
     def mostrar_registro(self):
         """Formulario de registro"""
         d = ctk.CTkToplevel(self)
@@ -2077,8 +2042,26 @@ class WelcomeXApp(ctk.CTk):
         import shutil
         from config.settings import RESOURCE_DIR, DATA_DIR
 
-        nombres = ["Juan", "María", "Carlos", "Ana", "Luis", "Laura", "Pedro", "Sofía", "Diego", "Valentina"]
-        apellidos = ["García", "Rodríguez", "Martínez", "López", "González", "Pérez", "Sánchez", "Fernández"]
+        nombres = [
+            "Juan", "María", "Carlos", "Ana", "Luis", "Laura", "Pedro", "Sofía", "Diego", "Valentina",
+            "Andrés", "Camila", "Mateo", "Isabella", "Sebastián", "Lucía", "Nicolás", "Martina",
+            "Gabriel", "Florencia", "Tomás", "Julieta", "Facundo", "Agustina", "Ignacio", "Natalia",
+            "Ezequiel", "Rocío", "Leandro", "Valeria", "Rodrigo", "Micaela", "Federico", "Paola",
+            "Mariano", "Antonella", "Hernán", "Celeste", "Gustavo", "Verónica"
+        ]
+        apellidos = [
+            "García", "Rodríguez", "Martínez", "López", "González", "Pérez", "Sánchez", "Fernández",
+            "Romero", "Torres", "Álvarez", "Ruiz", "Ramírez", "Flores", "Acosta", "Medina",
+            "Herrera", "Castro", "Suárez", "Ortiz", "Moreno", "Guerrero", "Muñoz", "Vargas",
+            "Delgado", "Reyes", "Cabrera", "Ríos", "Molina", "Silva", "Ponce", "Vera",
+            "Aguirre", "Ibáñez", "Ramos", "Mendoza", "Bravo", "Navarro", "Ávila", "Salazar"
+        ]
+
+        # Generar combinaciones únicas nombre+apellido
+        import itertools
+        todas_combinaciones = list(itertools.product(nombres, apellidos))
+        random.shuffle(todas_combinaciones)
+        combinaciones_unicas = todas_combinaciones[:300]  # máximo 300 únicos
 
         # === INVITADOS VIP CON VIDEO PERSONALIZADO ===
         # Copiar video personalizado demo si existe
@@ -2116,12 +2099,9 @@ class WelcomeXApp(ctk.CTk):
             if resultado_vip["success"]:
                 vip_ids.append(resultado_vip["id"])
 
-        # === INVITADOS REGULARES ===
-        for i in range(300):
-            nombre = random.choice(nombres)
-            apellido = random.choice(apellidos)
+        # === INVITADOS REGULARES (nombres únicos) ===
+        for nombre, apellido in combinaciones_unicas:
             mesa = random.randint(1, 30)
-
             resultado_inv = db.agregar_invitado(evento_id, nombre, apellido, mesa)
             if resultado_inv["success"]:
                 invitados_ids.append(resultado_inv["id"])
@@ -2382,19 +2362,6 @@ class WelcomeXApp(ctk.CTk):
         self.content = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg"])
         self.content.pack(side="right", fill="both", expand=True, padx=25, pady=25)
         
-        # Banner demo si es modo demo
-        if self.es_modo_demo():
-            demo_banner = ctk.CTkFrame(self.content, fg_color="#1e3a8a", corner_radius=10)
-            demo_banner.pack(fill="x", pady=(0, 20))
-            
-            banner_inner = ctk.CTkFrame(demo_banner, fg_color="transparent")
-            banner_inner.pack(padx=25, pady=18)
-            
-            ctk.CTkLabel(banner_inner, text=f"🎭 {t('demo.mode_label')}",
-                        font=("Arial", 18, "bold"), text_color="#60a5fa").pack(anchor="w")
-            ctk.CTkLabel(banner_inner,
-                        text=t("demo.banner_info"),
-                        font=("Arial", 12), text_color="#bfdbfe", justify="left").pack(anchor="w", pady=(5, 0))
         
         # Mostrar contenido inicial
         self.mostrar_eventos()
@@ -2443,18 +2410,13 @@ class WelcomeXApp(ctk.CTk):
     def mostrar_estado_licencia(self, parent):
         """Mostrar estado de licencia PAMPA con indicador visual claro"""
         try:
-            # Verificar si estamos en modo demo
-            if self.es_modo_demo():
-                frame_lic = ctk.CTkFrame(parent, fg_color="#1e3a5f", corner_radius=8)
+
+            # Admins no necesitan licencia
+            if self.usuario_actual and self.usuario_actual.get("rol") in ("admin", "superadmin"):
+                frame_lic = ctk.CTkFrame(parent, fg_color="#1a3a1a", corner_radius=8)
                 frame_lic.pack(side="right", padx=10)
-
-                inner = ctk.CTkFrame(frame_lic, fg_color="transparent")
-                inner.pack(padx=15, pady=8)
-
-                ctk.CTkLabel(inner, text=f"🎭 {t('demo.mode_label')}",
-                            font=("Arial", 12, "bold"), text_color="#60a5fa").pack()
-                ctk.CTkLabel(inner, text=t("demo.no_active_license"),
-                            font=("Arial", 10), text_color="#93c5fd").pack()
+                ctk.CTkLabel(frame_lic, text="👑 Admin",
+                            font=("Arial", 12, "bold"), text_color="#4ade80").pack(padx=15, pady=8)
                 return
 
             # Obtener estado de licencia desde caché
@@ -2703,7 +2665,7 @@ class WelcomeXApp(ctk.CTk):
 
         elif evento['estado'] == 'finalizado':
             ctk.CTkButton(btn_row, text="📊 Ver Reporte", width=140, height=42,
-                         font=("Arial", 13), fg_color=COLORS["primary"],
+                         font=("Arial", 13), fg_color=COLORS["success"],
                          command=lambda e=evento: self.ver_reporte_evento(e)).pack(side="left", padx=4)
             if self.tiene_permiso('eliminar_eventos'):
                 ctk.CTkButton(btn_row, text="🗑️ Eliminar", width=120, height=42,
@@ -2720,12 +2682,17 @@ class WelcomeXApp(ctk.CTk):
                          font=("Arial", 13),
                          command=lambda e=evento: self.ver_sorteos(e)).pack(side="left", padx=4)
 
-        if evento['estado'] == 'activo' and self.tiene_permiso('abrir_kiosco'):
-            ctk.CTkButton(btn_row, text="📱 Kiosco", width=120, height=42,
+        if evento['estado'] == 'activo':
+            ctk.CTkButton(btn_row, text="👤 Operar", width=120, height=42,
                          font=("Arial", 13),
-                         command=lambda e=evento: self.abrir_kiosco(e)).pack(side="left", padx=4)
+                         fg_color=COLORS["success"],
+                         command=lambda e=evento: self.mostrar_panel_operador_inline(e)).pack(side="left", padx=4)
+            if self.tiene_permiso('abrir_kiosco'):
+                ctk.CTkButton(btn_row, text="📱 Kiosco", width=120, height=42,
+                             font=("Arial", 13),
+                             command=lambda e=evento: self.abrir_kiosco(e)).pack(side="left", padx=4)
 
-        if evento['estado'] != 'finalizado' and self.tiene_permiso('crear_eventos') and not self.es_modo_demo():
+        if evento['estado'] != 'finalizado' and self.tiene_permiso('crear_eventos'):
             ctk.CTkButton(btn_row, text="✏️ Editar", width=110, height=42,
                          font=("Arial", 13),
                          command=lambda e=evento: self.editar_evento(e)).pack(side="left", padx=4)
@@ -2854,6 +2821,15 @@ class WelcomeXApp(ctk.CTk):
 
             if not nombre or not fecha or not hora:
                 self.mostrar_mensaje("Error", "Nombre, fecha y hora de inicio son obligatorios", "error")
+                return
+
+            try:
+                fecha_dt = datetime.strptime(fecha, "%Y-%m-%d").date()
+                if fecha_dt < datetime.now().date():
+                    self.mostrar_mensaje("Error", "La fecha del evento no puede ser en el pasado", "error")
+                    return
+            except ValueError:
+                self.mostrar_mensaje("Error", "Formato de fecha inválido. Use AAAA-MM-DD", "error")
                 return
 
             resultado = db.crear_evento(
@@ -3129,11 +3105,20 @@ class WelcomeXApp(ctk.CTk):
             nombre = e_nombre.get().strip()
             fecha = e_fecha.get().strip()
             hora = e_hora.get().strip()
-            
+
             if not nombre or not fecha or not hora:
                 self.mostrar_mensaje("Error", "Nombre, fecha y hora son obligatorios", "error")
                 return
-            
+
+            try:
+                fecha_dt = datetime.strptime(fecha, "%Y-%m-%d").date()
+                if fecha_dt < datetime.now().date():
+                    self.mostrar_mensaje("Error", "La fecha del evento no puede ser en el pasado", "error")
+                    return
+            except ValueError:
+                self.mostrar_mensaje("Error", "Formato de fecha inválido. Use AAAA-MM-DD", "error")
+                return
+
             # Actualizar evento
             db.connect()
             try:
@@ -3388,7 +3373,7 @@ class WelcomeXApp(ctk.CTk):
                      font=("Arial", 14)).pack(side="left")
 
         # Botones RIGHT primero para que siempre tengan espacio
-        if self.tiene_permiso('agregar_invitados') and not self.es_modo_demo():
+        if self.tiene_permiso('agregar_invitados'):
             btn_group = ctk.CTkFrame(header, fg_color="transparent")
             btn_group.pack(side="right")
 
@@ -3521,7 +3506,7 @@ class WelcomeXApp(ctk.CTk):
             stats_label.configure(text=stats_text)
             
             # Mostrar invitados filtrados (máximo 200 para no trabar la UI)
-            MAX_FILAS = 200
+            MAX_FILAS = 50
             if not invitados_filtrados:
                 ctk.CTkLabel(lista_frame,
                             text="No se encontraron invitados con esos criterios.",
@@ -3578,7 +3563,7 @@ class WelcomeXApp(ctk.CTk):
                         font=("Arial", 13, "bold")).pack(side="left", padx=12)
         
         # Botones de acción (ocultos en modo demo)
-        if self.tiene_permiso('editar_invitados') and not self.es_modo_demo():
+        if self.tiene_permiso('editar_invitados'):
             ctk.CTkButton(inner, text="📧", command=lambda: self.generar_invitacion_individual(inv),
                          width=40, height=32, font=("Arial", 14),
                          fg_color="#10b981",
@@ -3588,7 +3573,7 @@ class WelcomeXApp(ctk.CTk):
                          width=40, height=32, font=("Arial", 14),
                          fg_color=COLORS["primary"]).pack(side="right", padx=2)
 
-        if self.tiene_permiso('eliminar_invitados') and not self.es_modo_demo():
+        if self.tiene_permiso('eliminar_invitados'):
             ctk.CTkButton(inner, text="🗑️", command=lambda: self.eliminar_invitado(inv),
                          width=40, height=32, font=("Arial", 14),
                          fg_color=COLORS["danger"]).pack(side="right", padx=2)
@@ -4220,28 +4205,382 @@ class WelcomeXApp(ctk.CTk):
     # ============================================
     
     def abrir_kiosco(self, evento):
-        """Abrir kiosco + panel de operador"""
+        """Abrir kiosco + panel de operador inline en ventana principal"""
         from modules.kiosco_ui import KioscoWindow
-        from modules.operator_panel import OperatorPanel
 
         orientacion = 'horizontal'
 
         try:
             kiosco = KioscoWindow(self, evento, orientacion, kiosco_id=1)
-
-            # Panel de operador (ventana secundaria, siempre al frente)
-            try:
-                panel = OperatorPanel(self, evento, kiosco_window=kiosco)
-                kiosco.operator_panel_ref = panel  # referencia para F2
-            except Exception as pe:
-                print(f"[OperatorPanel] No se pudo abrir: {pe}")
-
-            kiosco.mainloop()
+            # Mostrar panel operador inline en la ventana principal
+            self.mostrar_panel_operador_inline(evento, kiosco=kiosco)
+            kiosco.operator_panel_ref = self._operator_panel_inline_ref
         except Exception as e:
             print(f"Error abriendo kiosco: {e}")
             import traceback
             traceback.print_exc()
             self.mostrar_mensaje("Error", f"Error al abrir kiosco:\n{str(e)}", "error")
+
+    def mostrar_panel_operador_inline(self, evento, kiosco=None):
+        """Panel operador embebido en self.content (sin ventana flotante)"""
+        import threading as _threading
+
+        # Cancelar refresh anterior si existe
+        if hasattr(self, '_op_refresh_job') and self._op_refresh_job:
+            try:
+                self.after_cancel(self._op_refresh_job)
+            except Exception:
+                pass
+        self._op_refresh_job    = None
+        self._op_kiosco         = kiosco
+        self._op_evento         = evento
+        self._op_todos          = []
+        self._op_hash           = None
+        self._op_sel            = None
+        self._op_sel_id         = None
+        self._op_row_pool       = []
+        self._op_sel_row_frame  = None
+        self._operator_panel_inline_ref = self  # para el kiosco
+
+        for w in self.content.winfo_children():
+            w.destroy()
+
+        root = self.content
+
+        # ── Header ──────────────────────────────────────────────────
+        header = ctk.CTkFrame(root, fg_color=COLORS["card"], corner_radius=0, height=56)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        ctk.CTkLabel(header, text=f"📋 Panel Operador — {evento['nombre']}",
+                     font=("Arial", 16, "bold"),
+                     text_color=COLORS["gold"]).pack(side="left", padx=16)
+
+        self._op_lbl_stats = ctk.CTkLabel(header, text="",
+                                           font=("Arial", 13),
+                                           text_color=COLORS["text_light"])
+        self._op_lbl_stats.pack(side="right", padx=16)
+
+        ctk.CTkButton(header, text="← Volver a Eventos",
+                      command=self._op_cerrar,
+                      height=34, font=("Arial", 12),
+                      fg_color="transparent", border_width=1,
+                      border_color=COLORS["border"]).pack(side="right", padx=10)
+
+        # ── Buscador ──────────────────────────────────────────────────
+        search_frame = ctk.CTkFrame(root, fg_color="transparent")
+        search_frame.pack(fill="x", padx=14, pady=(10, 4))
+
+        self._op_search_var = ctk.StringVar()
+        self._op_debounce   = None
+        self._op_search_var.trace_add("write", self._op_on_search)
+
+        ctk.CTkEntry(search_frame,
+                     textvariable=self._op_search_var,
+                     placeholder_text="🔍  Buscar por nombre, apellido o mesa...",
+                     height=40, font=("Arial", 13),
+                     fg_color=COLORS["card"]).pack(fill="x")
+
+        # ── Filtros ────────────────────────────────────────────────────
+        filter_frame = ctk.CTkFrame(root, fg_color="transparent")
+        filter_frame.pack(fill="x", padx=14, pady=(0, 6))
+
+        self._op_filtro_var = ctk.StringVar(value="todos")
+        for val, lbl in [("todos", "Todos"), ("pendientes", "Pendientes"), ("acreditados", "Acreditados")]:
+            ctk.CTkRadioButton(filter_frame, text=lbl,
+                               variable=self._op_filtro_var, value=val,
+                               font=("Arial", 12),
+                               command=self._op_filtrar).pack(side="left", padx=(0, 12))
+
+        # ── Lista ──────────────────────────────────────────────────────
+        self._op_list_frame = ctk.CTkScrollableFrame(root,
+                                                      fg_color=COLORS["bg"],
+                                                      border_width=1,
+                                                      border_color=COLORS["border"])
+        self._op_list_frame.pack(fill="both", expand=True, padx=14, pady=(0, 8))
+
+        # ── Panel inferior ─────────────────────────────────────────────
+        bottom = ctk.CTkFrame(root, fg_color=COLORS["card"],
+                              corner_radius=10, border_width=1,
+                              border_color=COLORS["border"])
+        bottom.pack(fill="x", padx=14, pady=(0, 14))
+
+        inner = ctk.CTkFrame(bottom, fg_color="transparent")
+        inner.pack(fill="x", padx=14, pady=12)
+
+        self._op_lbl_sel = ctk.CTkLabel(inner,
+                                         text="Seleccioná un invitado de la lista",
+                                         font=("Arial", 12),
+                                         text_color=COLORS["text_light"],
+                                         wraplength=600, justify="left")
+        self._op_lbl_sel.pack(fill="x", pady=(0, 10))
+
+        btn_row = ctk.CTkFrame(inner, fg_color="transparent")
+        btn_row.pack(fill="x")
+
+        self._op_btn_acreditar = ctk.CTkButton(btn_row,
+                                                text="✅ Acreditar",
+                                                command=self._op_acreditar,
+                                                height=44, font=("Arial", 14, "bold"),
+                                                fg_color=COLORS["success"],
+                                                state="disabled")
+        self._op_btn_acreditar.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        self._op_btn_repetir = ctk.CTkButton(btn_row,
+                                              text="🔁 Repetir en kiosco",
+                                              command=self._op_repetir,
+                                              height=44, font=("Arial", 14),
+                                              fg_color=COLORS["primary"],
+                                              state="disabled")
+        self._op_btn_repetir.pack(side="left", fill="x", expand=True)
+
+        # Iniciar refresh
+        self._op_refresh()
+
+    # ── Métodos del panel inline ──────────────────────────────────────
+
+    def _op_cerrar(self):
+        if hasattr(self, '_op_refresh_job') and self._op_refresh_job:
+            try:
+                self.after_cancel(self._op_refresh_job)
+            except Exception:
+                pass
+        self._op_refresh_job = None
+        if hasattr(self, '_op_kiosco') and self._op_kiosco:
+            try:
+                self._op_kiosco.operator_panel_ref = None
+            except Exception:
+                pass
+        self.mostrar_eventos()
+
+    def _op_refresh(self):
+        import threading as _threading
+        def _query():
+            try:
+                db.connect()
+                nuevos = db.obtener_invitados_evento(self._op_evento['id'])
+                db.disconnect()
+            except Exception:
+                nuevos = []
+            try:
+                self.after(0, lambda: self._op_on_datos(nuevos))
+            except Exception:
+                pass
+        _threading.Thread(target=_query, daemon=True).start()
+        self._op_refresh_job = self.after(2000, self._op_refresh)
+
+    def _op_on_datos(self, nuevos):
+        nuevo_hash = str([(i['id'], i.get('presente')) for i in nuevos])
+        if nuevo_hash != self._op_hash:
+            self._op_todos = nuevos
+            self._op_hash  = nuevo_hash
+            total     = len(nuevos)
+            presentes = sum(1 for i in nuevos if i.get('presente'))
+            try:
+                self._op_lbl_stats.configure(text=f"✅ {presentes} / {total}")
+            except Exception:
+                pass
+            self._op_filtrar()
+
+    def _op_on_search(self, *_):
+        if self._op_debounce:
+            try:
+                self.after_cancel(self._op_debounce)
+            except Exception:
+                pass
+        self._op_debounce = self.after(200, self._op_filtrar)
+
+    def _op_filtrar(self):
+        if not hasattr(self, '_op_search_var'):
+            return
+        texto  = self._op_search_var.get().strip().lower()
+        filtro = self._op_filtro_var.get()
+        resultado = []
+        for inv in self._op_todos:
+            nc = f"{inv['nombre']} {inv['apellido']}".lower()
+            mt = str(inv.get('mesa') or '').lower()
+            if texto and texto not in nc and texto not in mt:
+                continue
+            if filtro == "pendientes"  and inv.get('presente'):
+                continue
+            if filtro == "acreditados" and not inv.get('presente'):
+                continue
+            resultado.append(inv)
+        self._op_pintar_lista(resultado)
+
+    def _op_pintar_lista(self, invitados):
+        MAX = 150
+        visibles = invitados[:MAX]
+        lf = self._op_list_frame
+
+        pool_frames = {r[0] for r in self._op_row_pool}
+        for w in lf.winfo_children():
+            if w not in pool_frames:
+                try:
+                    w.destroy()
+                except Exception:
+                    pass
+
+        if not visibles:
+            ctk.CTkLabel(lf, text="Sin resultados",
+                         font=("Arial", 13),
+                         text_color=COLORS["text_light"]).pack(pady=20)
+            for r in self._op_row_pool:
+                r[0].pack_forget()
+            self._op_sel_row_frame = None
+            return
+
+        for i, inv in enumerate(visibles):
+            if i < len(self._op_row_pool):
+                self._op_actualizar_fila(self._op_row_pool[i], inv)
+                self._op_row_pool[i][0].pack(fill="x", pady=3)
+            else:
+                self._op_row_pool.append(self._op_crear_fila(inv))
+
+        for i in range(len(visibles), len(self._op_row_pool)):
+            self._op_row_pool[i][0].pack_forget()
+
+        self._op_sel_row_frame = None
+        if self._op_sel_id is not None:
+            for i, inv in enumerate(visibles):
+                if inv['id'] == self._op_sel_id and i < len(self._op_row_pool):
+                    row = self._op_row_pool[i][0]
+                    row.configure(fg_color=COLORS["border"])
+                    self._op_sel_row_frame = row
+                    break
+
+        if len(invitados) > MAX:
+            ctk.CTkLabel(lf,
+                         text=f"Mostrando {MAX} de {len(invitados)} — usá el buscador",
+                         font=("Arial", 11),
+                         text_color=COLORS["text_light"]).pack(pady=8)
+
+    def _op_crear_fila(self, inv):
+        presente = inv.get('presente')
+        row = ctk.CTkFrame(self._op_list_frame, fg_color=COLORS["card"],
+                           corner_radius=8, cursor="hand2")
+        row.pack(fill="x", pady=3)
+        inner = ctk.CTkFrame(row, fg_color="transparent")
+        inner.pack(fill="x", padx=12, pady=8)
+        icon = ctk.CTkLabel(inner, text="✅" if presente else "🕐",
+                            font=("Arial", 16), width=28)
+        icon.pack(side="left")
+        nombre_lbl = ctk.CTkLabel(inner, text=f"{inv['nombre']} {inv['apellido']}",
+                                   font=("Arial", 13, "bold" if not presente else "normal"),
+                                   text_color=COLORS["text"] if not presente else COLORS["text_light"],
+                                   anchor="w")
+        nombre_lbl.pack(side="left", padx=(8, 0), fill="x", expand=True)
+        mesa_lbl = ctk.CTkLabel(inner, text=f"Mesa {inv['mesa']}" if inv.get('mesa') else "",
+                                font=("Arial", 11), text_color=COLORS["text_light"], width=60)
+        if inv.get('mesa'):
+            mesa_lbl.pack(side="right")
+        widgets = (row, icon, nombre_lbl, mesa_lbl)
+        def _click(e, i=inv, r=row):
+            self._op_seleccionar(i, r)
+        for w in (row, inner, icon, nombre_lbl, mesa_lbl):
+            w.bind("<Button-1>", _click)
+        return widgets
+
+    def _op_actualizar_fila(self, widgets, inv):
+        row, icon, nombre_lbl, mesa_lbl = widgets
+        presente = inv.get('presente')
+        row.configure(fg_color=COLORS["card"])
+        icon.configure(text="✅" if presente else "🕐")
+        nombre_lbl.configure(
+            text=f"{inv['nombre']} {inv['apellido']}",
+            font=("Arial", 13, "bold" if not presente else "normal"),
+            text_color=COLORS["text"] if not presente else COLORS["text_light"])
+        if inv.get('mesa'):
+            mesa_lbl.configure(text=f"Mesa {inv['mesa']}")
+            mesa_lbl.pack(side="right")
+        else:
+            mesa_lbl.pack_forget()
+        def _click(e, i=inv, r=row):
+            self._op_seleccionar(i, r)
+        targets = [row, icon, nombre_lbl, mesa_lbl]
+        children = row.winfo_children()
+        if children:
+            targets.append(children[0])
+        for w in targets:
+            try:
+                w.bind("<Button-1>", _click)
+            except Exception:
+                pass
+
+    def _op_seleccionar(self, inv, row_widget):
+        if self._op_sel_row_frame:
+            try:
+                self._op_sel_row_frame.configure(fg_color=COLORS["card"])
+            except Exception:
+                pass
+        row_widget.configure(fg_color=COLORS["border"])
+        self._op_sel_row_frame = row_widget
+        self._op_sel_id = inv['id']
+        self._op_sel    = inv
+        presente = inv.get('presente')
+        nombre   = f"{inv['nombre']} {inv['apellido']}"
+        mesa_txt = f" · Mesa {inv['mesa']}" if inv.get('mesa') else ""
+        obs_txt  = f"\n📝 {inv.get('observaciones','')}" if inv.get('observaciones') else ""
+        if presente:
+            self._op_lbl_sel.configure(
+                text=f"✅ {nombre}{mesa_txt}{obs_txt}\nYa acreditado — podés repetir o desacreditar",
+                text_color=COLORS["text_light"])
+            self._op_btn_acreditar.configure(text="🔄 Desacreditar", state="normal",
+                                              fg_color=COLORS["warning"])
+        else:
+            self._op_lbl_sel.configure(
+                text=f"🕐 {nombre}{mesa_txt}{obs_txt}\nListo para acreditar",
+                text_color=COLORS["text"])
+            self._op_btn_acreditar.configure(text="✅ Acreditar", state="normal",
+                                              fg_color=COLORS["success"])
+        kiosco = getattr(self, '_op_kiosco', None)
+        self._op_btn_repetir.configure(state="normal" if kiosco else "disabled")
+
+    def _op_acreditar(self):
+        inv = self._op_sel
+        if not inv:
+            return
+        era = bool(inv.get('presente'))
+        try:
+            db.connect()
+            resultado = db.acreditar_invitado(inv['id'], self._op_evento['id'], kiosco_id=0)
+            db.disconnect()
+        except Exception as e:
+            print(f"[OpInline] Error: {e}")
+            return
+        if resultado:
+            inv['presente'] = 0 if era else 1
+            nombre = f"{inv['nombre']} {inv['apellido']}"
+            mesa   = f" · Mesa {inv['mesa']}" if inv.get('mesa') else ""
+            if era:
+                self._op_lbl_sel.configure(
+                    text=f"🔄 {nombre}{mesa}\nDesacreditado manualmente",
+                    text_color=COLORS["warning"])
+                self._op_btn_acreditar.configure(text="✅ Acreditar", fg_color=COLORS["success"])
+            else:
+                self._op_lbl_sel.configure(
+                    text=f"✅ {nombre}{mesa}\nAcreditado manualmente",
+                    text_color=COLORS["success"])
+                self._op_btn_acreditar.configure(text="🔄 Desacreditar", fg_color=COLORS["warning"])
+            kiosco = getattr(self, '_op_kiosco', None)
+            if kiosco and not era:
+                try:
+                    kiosco._beep("ok")
+                    kiosco._mostrar_acreditacion(inv, repetir=False)
+                except Exception:
+                    pass
+            self._op_refresh()
+
+    def _op_repetir(self):
+        inv    = self._op_sel
+        kiosco = getattr(self, '_op_kiosco', None)
+        if not inv or not kiosco:
+            return
+        try:
+            kiosco._beep("repetir")
+            kiosco._mostrar_acreditacion(inv, repetir=True)
+        except Exception as e:
+            print(f"[OpInline] Error repetir: {e}")
     
     def mostrar_kiosco_operario(self):
         """Vista de kiosco para operario"""
@@ -5452,12 +5791,10 @@ class WelcomeXApp(ctk.CTk):
             license_status = self.verificar_licencia_startup()
             if license_status == "valid":
                 self.mostrar_login()
-            elif license_status == "demo_active":
-                self.mostrar_login_demo()
             elif license_status == "requires_connection":
                 self.mostrar_requiere_conexion()
             else:
-                self.mostrar_opciones_inicio()
+                self.mostrar_login()
 
         ctk.CTkButton(inner, text=f"🔄 {t('connection.retry')}", command=reintentar,
                      height=50, width=280, font=("Arial", 16, "bold"),
@@ -5504,7 +5841,7 @@ class WelcomeXApp(ctk.CTk):
             elif license_status == "requires_connection":
                 self.mostrar_requiere_conexion()
             else:
-                self.mostrar_opciones_inicio()
+                self.mostrar_login()
 
         ctk.CTkButton(inner, text="🔄 Reintentar", command=reintentar,
                      height=50, width=280, font=("Arial", 16, "bold"),
@@ -5517,8 +5854,6 @@ class WelcomeXApp(ctk.CTk):
 
     def _iniciar_validacion_silenciosa(self):
         """Inicia el timer de validación silenciosa cada 10 minutos"""
-        if self.es_modo_demo():
-            return  # No validar en modo demo
 
         license_key = self.cargar_license_key()
         if not license_key:
@@ -5620,7 +5955,7 @@ class WelcomeXApp(ctk.CTk):
                 messagebox.showinfo("Licencia Liberada",
                                    "La licencia fue liberada correctamente.\n"
                                    "Puedes activarla en otro equipo.")
-                self.mostrar_opciones_inicio()
+                self.mostrar_login()
             else:
                 from tkinter import messagebox
                 messagebox.showerror("Error",
@@ -5664,7 +5999,7 @@ class WelcomeXApp(ctk.CTk):
             pass  # Silenciar errores si no hay sidebar
 
     # ============================================
-    # TRIAL DEMO (7 DÍAS)
+    # TRIAL DEMO (3 DÍAS)
     # ============================================
 
     def verificar_trial_demo(self) -> bool:
@@ -5710,14 +6045,14 @@ class WelcomeXApp(ctk.CTk):
         if data:
             try:
                 fecha_inicio = datetime.fromisoformat(data['started'])
-                dias_restantes = 7 - (datetime.now() - fecha_inicio).days
+                dias_restantes = 3 - (datetime.now() - fecha_inicio).days
                 return max(0, dias_restantes)
             except:
                 pass
 
         # Fallback: verificar en DB con machine_id
         dias_db = db.demo_dias_restantes(self.machine_id)
-        if dias_db < 7:
+        if dias_db < 3:
             return dias_db
 
         # Legacy: verificar con clave vieja demo_trial_inicio
@@ -5727,11 +6062,11 @@ class WelcomeXApp(ctk.CTk):
             row = db.cursor.fetchone()
 
             if not row:
-                return 7
+                return 3
 
             fecha_inicio = datetime.fromisoformat(row['valor'])
             dias_transcurridos = (datetime.now() - fecha_inicio).days
-            dias_restantes = 7 - dias_transcurridos
+            dias_restantes = 3 - dias_transcurridos
 
             return max(0, dias_restantes)
         except:
@@ -5768,12 +6103,12 @@ class WelcomeXApp(ctk.CTk):
             db.connection.commit()
             print(f"[WelcomeX] ✅ Trial demo iniciado: {fecha_inicio} (machine: {self.machine_id[:8]}...)")
         except Exception as e:
-
-Q650YbKSbUuu8sSy7RKjGvw0OWh8ornvoLsPkTZPI2Dmjjcl#Juw3S-PdEbpYMdSTL4WQ6bNBw-Yjnwh4RfpxVPDpxe4        finally:
+            print(f"[WelcomeX] ⚠️ Error guardando trial: {e}")
+        finally:
             db.disconnect()
 
     def mostrar_opciones_inicio(self):
-        """Pantalla inicial con opciones: Activar Licencia o Probar Demo"""
+        """Pantalla inicial — Activar Licencia"""
         self.limpiar_ventana()
 
         container = ctk.CTkFrame(self, fg_color=COLORS["bg"])
@@ -5795,35 +6130,182 @@ Q650YbKSbUuu8sSy7RKjGvw0OWh8ornvoLsPkTZPI2Dmjjcl#Juw3S-PdEbpYMdSTL4WQ6bNBw-Yjnwh
         ctk.CTkLabel(inner, text=t("app.subtitle"),
                     font=("Arial", 16), text_color=COLORS["text_light"]).pack(pady=(0, 40))
 
-        # Opción 1: Activar Licencia
-        btn_licencia = ctk.CTkButton(
+        # Iniciar Sesión
+        ctk.CTkButton(
             inner,
-            text=f"🔐 {t('demo.activate_license')}",
-            command=self.mostrar_activacion_licencia,
-            height=60,
-            width=350,
-            font=("Arial", 16, "bold"),
-            fg_color=COLORS["success"]
-        )
-        btn_licencia.pack(pady=10)
-
-        ctk.CTkLabel(inner, text=t("demo.activate_license_desc"),
-                    font=("Arial", 11), text_color=COLORS["text_light"]).pack(pady=(0, 30))
-
-        # Opción 2: Probar Demo
-        btn_demo = ctk.CTkButton(
-            inner,
-            text=f"🎮 {t('demo.try_demo')}",
-            command=self.iniciar_demo_trial,
+            text="👤 Iniciar Sesión",
+            command=self.mostrar_login_pampa,
             height=60,
             width=350,
             font=("Arial", 16, "bold"),
             fg_color=COLORS["primary"]
-        )
-        btn_demo.pack(pady=10)
+        ).pack(pady=10)
 
-        ctk.CTkLabel(inner, text=t("demo.try_demo_desc"),
-                    font=("Arial", 11), text_color=COLORS["text_light"]).pack()
+        ctk.CTkLabel(inner, text="Usá tu cuenta de pampaguazu.com.ar",
+                    font=("Arial", 11), text_color=COLORS["text_light"]).pack(pady=(0, 15))
+
+        # Activar con código
+        ctk.CTkButton(
+            inner,
+            text=f"🔐 Activar con código de licencia",
+            command=self.mostrar_activacion_licencia,
+            height=50,
+            width=350,
+            font=("Arial", 14),
+            fg_color="transparent",
+            border_width=2,
+            border_color=COLORS["border"]
+        ).pack(pady=(0, 5))
+
+        ctk.CTkLabel(inner, text="Si recibiste un código, ingresalo aquí",
+                    font=("Arial", 11), text_color=COLORS["text_light"]).pack(pady=(0, 10))
+
+    def mostrar_login_pampa(self):
+        """Pantalla de inicio de sesión con cuenta PAMPA"""
+        self.limpiar_ventana()
+
+        container = ctk.CTkFrame(self, fg_color=COLORS["bg"])
+        container.pack(expand=True, fill="both")
+
+        frame = ctk.CTkFrame(container, fg_color=COLORS["card"], corner_radius=15)
+        frame.place(relx=0.5, rely=0.5, anchor="center")
+
+        inner = ctk.CTkFrame(frame, fg_color="transparent")
+        inner.pack(padx=60, pady=50)
+
+        ctk.CTkLabel(inner, text="👤 Iniciar Sesión",
+                    font=("Arial", 32, "bold")).pack(pady=(0, 10))
+        ctk.CTkLabel(inner, text="Usá tu cuenta de pampaguazu.com.ar",
+                    font=("Arial", 14), text_color=COLORS["text_light"]).pack(pady=(0, 30))
+
+        ctk.CTkLabel(inner, text="Email", anchor="w", font=("Arial", 13)).pack(fill="x")
+        e_email = ctk.CTkEntry(inner, width=400, height=45, font=("Arial", 14),
+                               placeholder_text="tu@email.com")
+        e_email.pack(pady=(4, 12))
+
+        ctk.CTkLabel(inner, text="Contraseña", anchor="w", font=("Arial", 13)).pack(fill="x")
+        e_pass = ctk.CTkEntry(inner, width=400, height=45, font=("Arial", 14),
+                              show="*", placeholder_text="••••••••")
+        e_pass.pack(pady=(4, 20))
+
+        msg_label = ctk.CTkLabel(inner, text="", font=("Arial", 12), wraplength=400)
+        msg_label.pack(pady=(0, 10))
+
+        def ingresar():
+            email = e_email.get().strip()
+            password = e_pass.get().strip()
+            if not email or not password:
+                msg_label.configure(text="❌ Completá email y contraseña", text_color=COLORS["danger"])
+                return
+
+            msg_label.configure(text="🔄 Verificando...", text_color=COLORS["warning"])
+            self.update()
+
+            try:
+                import requests as req_lib
+                import hashlib
+                password_hash = hashlib.sha256(password.encode()).hexdigest()
+                resp = req_lib.post(
+                    "https://pampaguazu.com.ar/api/v1/auth/login",
+                    json={"email": email, "password": password},
+                    timeout=10
+                )
+                data = resp.json()
+            except Exception as e:
+                msg_label.configure(text=f"❌ Sin conexión: {e}", text_color=COLORS["danger"])
+                return
+
+            if not data.get("success"):
+                msg_label.configure(
+                    text=f"❌ {data.get('error', 'Credenciales incorrectas')}",
+                    text_color=COLORS["danger"]
+                )
+                return
+
+            user_data = data.get("usuario", {})
+            user_rol = user_data.get("rol", "")
+
+            # Si es admin de PAMPA, entra directo sin necesitar licencia WelcomeX
+            if user_rol in ("admin", "superadmin"):
+                msg_label.configure(text="✅ Acceso admin", text_color=COLORS["success"])
+                # Sincronizar usuario local
+                db.connect()
+                try:
+                    db.cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+                    existing = db.cursor.fetchone()
+                    ph = hashlib.sha256(password.encode()).hexdigest()
+                    if existing:
+                        db.cursor.execute("UPDATE usuarios SET nombre=?, apellido=?, password=? WHERE email=?",
+                            (user_data.get('nombre',''), user_data.get('apellido',''), ph, email))
+                        local_id = existing['id']
+                    else:
+                        import uuid as _uuid
+                        db.cursor.execute("""INSERT INTO usuarios (uuid,email,password,nombre,apellido,rol,activo,fecha_registro)
+                            VALUES (?,?,?,?,?,'admin',1,?)""",
+                            (_uuid.uuid4().hex, email, ph,
+                             user_data.get('nombre',''), user_data.get('apellido',''),
+                             datetime.now().isoformat()))
+                        local_id = db.cursor.lastrowid
+                    db.connection.commit()
+                except Exception:
+                    local_id = 1
+                finally:
+                    db.disconnect()
+                self.usuario_actual = {
+                    "id": local_id,
+                    "email": email,
+                    "nombre": user_data.get('nombre',''),
+                    "apellido": user_data.get('apellido',''),
+                    "rol": "admin",
+                    "licencias": data.get("licencias", [])
+                }
+                self.after(800, self.mostrar_principal)
+                return
+
+            # Buscar licencia activa de WelcomeX
+            licencias = data.get("licencias", [])
+            lic_wx = next(
+                (l for l in licencias
+                 if "welcome" in (l.get("programa") or "").lower()
+                 and l.get("estado") == "active"),
+                None
+            )
+
+            if not lic_wx:
+                msg_label.configure(
+                    text="❌ No tenés una licencia activa de WelcomeX.\nContactá ventas@pampaguazu.com",
+                    text_color=COLORS["danger"]
+                )
+                return
+
+            # Activar con la licencia encontrada
+            license_key = lic_wx["license_key"]
+            msg_label.configure(text="🔄 Activando licencia...", text_color=COLORS["warning"])
+            self.update()
+
+            result = self.pampa.validate_license(license_key, force_online=True)
+            if result["valid"]:
+                self.guardar_license_key(license_key)
+                dias = result.get("days_remaining") or 0
+                msg_label.configure(
+                    text=f"✅ ¡Bienvenido! Licencia activa — {dias} días restantes",
+                    text_color=COLORS["success"]
+                )
+                self.after(1500, self.reiniciar_app)
+            else:
+                msg_label.configure(
+                    text=f"❌ {result.get('message', 'Error al activar')}",
+                    text_color=COLORS["danger"]
+                )
+
+        ctk.CTkButton(inner, text="Ingresar", command=ingresar,
+                     height=50, width=250, font=("Arial", 16, "bold"),
+                     fg_color=COLORS["primary"]).pack(pady=(5, 15))
+
+        ctk.CTkButton(inner, text="← Volver", command=self.mostrar_opciones_inicio,
+                     height=40, width=150, font=("Arial", 13),
+                     fg_color="transparent", border_width=2,
+                     border_color=COLORS["border"]).pack()
 
     def iniciar_demo_trial(self):
         """Inicia el trial demo y muestra login demo"""
@@ -5873,6 +6355,8 @@ Q650YbKSbUuu8sSy7RKjGvw0OWh8ornvoLsPkTZPI2Dmjjcl#Juw3S-PdEbpYMdSTL4WQ6bNBw-Yjnwh
 
         # Botón para entrar al demo
         def entrar_demo():
+            # Crear usuario/evento demo si no existe
+            self.crear_evento_demo()
             # Buscar usuario demo
             db.connect()
             try:

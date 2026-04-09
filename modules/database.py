@@ -1014,7 +1014,7 @@ class DatabaseManager:
         return False
 
     def demo_expirada(self, machine_id):
-        """Verificar si la demo de esta máquina ya expiró (7 días)"""
+        """Verificar si la demo de esta máquina ya expiró (3 días)"""
         clave = f"demo_started_{machine_id}"
         fecha_str = self.get_config(clave)
         if not fecha_str:
@@ -1022,7 +1022,7 @@ class DatabaseManager:
         try:
             from datetime import datetime, timedelta
             fecha_inicio = datetime.fromisoformat(fecha_str)
-            return datetime.now() > fecha_inicio + timedelta(days=7)
+            return datetime.now() > fecha_inicio + timedelta(days=3)
         except:
             return False
 
@@ -1031,11 +1031,11 @@ class DatabaseManager:
         clave = f"demo_started_{machine_id}"
         fecha_str = self.get_config(clave)
         if not fecha_str:
-            return 7
+            return 3
         try:
             from datetime import datetime, timedelta
             fecha_inicio = datetime.fromisoformat(fecha_str)
-            restantes = (fecha_inicio + timedelta(days=7) - datetime.now()).days
+            restantes = (fecha_inicio + timedelta(days=3) - datetime.now()).days
             return max(0, restantes)
         except:
             return 0
