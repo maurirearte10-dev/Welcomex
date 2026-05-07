@@ -1298,16 +1298,14 @@ class WelcomeXApp(ctk.CTk):
                             height=45, width=300, font=("Arial", 14, "bold"),
                             fg_color=COLORS["primary"]).pack(pady=(10, 0))
 
-                # Botón liberar licencia (solo si está habilitado)
-                allow_release = db.get_config("allow_self_release")
-                if allow_release == "1":
-                    ctk.CTkButton(lic_inner, text="🔓 Liberar licencia en este equipo",
-                                command=self._liberar_licencia,
-                                height=40, width=300, font=("Arial", 12),
-                                fg_color="transparent", border_width=1,
-                                border_color=COLORS["danger"],
-                                text_color=COLORS["danger"],
-                                hover_color="#2d1a1a").pack(pady=(10, 0))
+                # Botón solicitar liberación
+                ctk.CTkButton(lic_inner, text="🔓 Solicitar liberación de licencia",
+                            command=self._solicitar_liberacion,
+                            height=40, width=300, font=("Arial", 12),
+                            fg_color="transparent", border_width=1,
+                            border_color=COLORS["border"],
+                            text_color=COLORS["text_secondary"],
+                            hover_color="#1a1a2e").pack(pady=(10, 0))
             else:
                 ctk.CTkLabel(lic_inner, text=f"❌ {t('config.license_expired')}",
                             font=("Arial", 15), text_color=COLORS["danger"]).pack(anchor="w")
@@ -5714,46 +5712,49 @@ class WelcomeXApp(ctk.CTk):
         msg_label = ctk.CTkLabel(inner, text="", font=("Arial", 12), wraplength=400)
         msg_label.pack(pady=(0, 10))
 
+        btn_activar = None
+
         def activar():
             license_key = entry_key.get().strip()
-
             if not license_key:
                 msg_label.configure(text="❌ Ingresa una clave de licencia", text_color=COLORS["danger"])
                 return
-
             msg_label.configure(text="🔄 Validando con PAMPA...", text_color=COLORS["warning"])
-            self.update()
+            if btn_activar:
+                btn_activar.configure(state="disabled")
+            import threading as _th
+            _th.Thread(target=_activar_bg, args=(license_key,), daemon=True).start()
 
-            # Validar con PAMPA
-            result = self.pampa.validate_license(license_key, force_online=True)
+        def _activar_bg(license_key: str):
+            try:
+                result = self.pampa.validate_license(license_key, force_online=True)
+            except Exception as e:
+                result = {"valid": False, "status": "error", "message": str(e)}
+            self.after(0, lambda r=result: _activar_done(license_key, r))
 
-            if result['valid']:
-                # Guardar licencia
+        def _activar_done(license_key: str, result: dict):
+            if btn_activar:
+                btn_activar.configure(state="normal")
+            if result.get('valid'):
                 self.guardar_license_key(license_key)
-
                 dias = result.get('days_remaining') or 0
                 expira_str = result.get('expires_at', '')
                 try:
                     expira_fmt = datetime.fromisoformat(expira_str).strftime('%d/%m/%Y %H:%M') + ' hs'
-                except:
+                except Exception:
                     expira_fmt = f"{dias} días"
-                msg_label.configure(
-                    text=f"✅ Licencia activada! Vence el {expira_fmt}",
-                    text_color=COLORS["success"]
-                )
-
-                # Reiniciar app después de 1 segundo
+                msg_label.configure(text=f"✅ Licencia activada! Vence el {expira_fmt}", text_color=COLORS["success"])
                 self.after(1500, self.reiniciar_app)
             else:
                 msg_label.configure(
-                    text=f"❌ {result['status']}: {result['message']}",
-                    text_color=COLORS["danger"],
-                    wraplength=400
+                    text=f"❌ {result.get('message', result.get('status', 'Error desconocido'))}",
+                    text_color=COLORS["danger"], wraplength=400
                 )
 
-        ctk.CTkButton(inner, text="Activar Licencia", command=activar,
+        btn_activar = ctk.CTkButton(inner, text="Activar Licencia", command=activar,
                      height=50, width=250, font=("Arial", 16, "bold"),
-                     fg_color=COLORS["success"]).pack(pady=(10, 20))
+                     fg_color=COLORS["success"])
+        btn_activar.pack(pady=(10, 20))
 
         ctk.CTkLabel(inner, text="¿No tienes licencia? Contacta ventas@pampaguazu.com",
                     font=("Arial", 11), text_color=COLORS["text_light"]).pack()
@@ -5904,7 +5905,7 @@ class WelcomeXApp(ctk.CTk):
                     # Licencia invalidada: reemplazada, revocada, vencida
                     status = result.get('status', '')
                     print(f"[WelcomeX] Validación silenciosa falló: {status}")
-                    if status == 'hardware_replaced':
+                    if status in ('hardware_replaced', 'hardware_mismatch'):
                         self.mostrar_hardware_reemplazado()
                     elif status == 'revoked':
                         self.mostrar_requiere_conexion()
@@ -5935,6 +5936,49 @@ class WelcomeXApp(ctk.CTk):
         except:
             pass
         db.disconnect()
+
+    def _solicitar_liberacion(self):
+        """Envía solicitud de liberación al soporte — no libera directamente."""
+        from tkinter.simpledialog import askstring
+        license_key = self.cargar_license_key()
+        if not license_key:
+            from tkinter import messagebox
+            messagebox.showwarning("Sin licencia", "No hay una licencia activa para liberar.")
+            return
+        motivo = askstring("Motivo (opcional)",
+                           "¿Por qué necesitás cambiar de equipo?\n(ayuda al soporte a procesar más rápido)",
+                           parent=self) or ""
+        if motivo is None:
+            return
+        import threading
+        threading.Thread(target=self._do_solicitar_liberacion, args=(license_key, motivo), daemon=True).start()
+
+    def _do_solicitar_liberacion(self, license_key: str, motivo: str):
+        try:
+            import requests as req_lib, socket
+            api_url = self.pampa.api_url
+            hw = self.pampa.get_hardware_hash() if hasattr(self.pampa, 'get_hardware_hash') else ""
+            r = req_lib.post(f"{api_url}/api/v1/license/request-release", json={
+                "license_key": license_key,
+                "hardware_id": hw,
+                "machine_name": socket.gethostname(),
+                "reason": motivo or "Sin motivo indicado"
+            }, timeout=10)
+            try:
+                data = r.json()
+            except Exception:
+                data = {"success": False, "message": f"Error del servidor ({r.status_code})"}
+            from tkinter import messagebox
+            if data.get("success"):
+                self.after(0, lambda: messagebox.showinfo("Solicitud enviada",
+                    "Tu solicitud fue enviada al soporte.\n"
+                    "Te avisaremos cuando sea procesada y podrás activar en el nuevo equipo."))
+            else:
+                msg = data.get("message", "Error al enviar la solicitud.")
+                self.after(0, lambda m=msg: messagebox.showwarning("No se pudo enviar", m))
+        except Exception as e:
+            from tkinter import messagebox
+            self.after(0, lambda m=str(e): messagebox.showerror("Error", m))
 
     def _liberar_licencia(self):
         """Liberar la licencia de este equipo"""
