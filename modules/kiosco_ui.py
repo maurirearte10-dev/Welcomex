@@ -857,6 +857,7 @@ class KioscoWindow(ctk.CTkToplevel):
 
     def _reproducir_video_temporal_opencv(self, video_path):
         """Fallback: Reproducir video temporal con OpenCV (sin audio)"""
+        self._video_temporal_activo = True
         try:
             import cv2
             from PIL import Image, ImageTk
