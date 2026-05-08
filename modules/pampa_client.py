@@ -8,6 +8,7 @@ import uuid
 import subprocess
 import hashlib
 import json
+import base64
 import socket
 import jwt
 from datetime import datetime, timedelta
@@ -28,6 +29,9 @@ class PampaClient:
         # Token JWT local
         self.token_file = Path.home() / ".pampa" / f"{program_code}_token.jwt"
         self.token_file.parent.mkdir(exist_ok=True)
+
+        # Clave pública RSA para verificación offline de firma JWT
+        self.public_key_file = Path.home() / ".pampa" / f"{program_code}_pubkey.pem"
 
         # Cache viejo (para migración)
         self.old_cache_file = Path.home() / ".pampa" / f"{program_code}_license.json"
@@ -142,21 +146,93 @@ class PampaClient:
         except:
             return None
 
+    def fetch_and_cache_public_key(self) -> bool:
+        """Descarga la clave pública RSA del servidor y la guarda localmente."""
+        try:
+            resp = requests.get(f"{self.api_url}/api/v1/jwt-public-key", timeout=5)
+            if resp.status_code == 200 and "BEGIN PUBLIC KEY" in resp.text:
+                self.public_key_file.write_text(resp.text)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _load_public_key_pem(self) -> Optional[str]:
+        if self.public_key_file.exists():
+            try:
+                return self.public_key_file.read_text()
+            except Exception:
+                pass
+        return None
+
     def load_token(self) -> Optional[dict]:
         """
-        Carga y decodifica el token JWT local (sin verificar firma).
-        Retorna el payload como dict o None si no existe/es inválido.
+        Carga y verifica el token JWT local.
+        - Tokens RS256: verifica la firma con la clave pública cacheada.
+        - Tokens HS256 legacy: decodifica sin verificación (migración gradual).
         """
         raw = self.load_token_raw()
         if not raw:
             return None
 
+        # Detectar algoritmo del token
         try:
-            payload = jwt.decode(raw, options={"verify_signature": False})
-            return payload
-        except Exception as e:
-            print(f"[PAMPA] Error decodificando token: {e}")
-            return None
+            import base64 as _b64
+            hdr_b64 = raw.split(".")[0]
+            hdr_b64 += "=" * (4 - len(hdr_b64) % 4)
+            alg = json.loads(_b64.urlsafe_b64decode(hdr_b64)).get("alg", "HS256")
+        except Exception:
+            alg = "HS256"
+
+        if alg == "RS256":
+            pub_pem = self._load_public_key_pem()
+            if pub_pem:
+                try:
+                    payload = jwt.decode(raw, pub_pem, algorithms=["RS256"],
+                                         options={"verify_exp": False})
+                    return payload
+                except jwt.InvalidSignatureError:
+                    # Podría ser rotación de clave — intentar refrescar y reintentar
+                    if self.fetch_and_cache_public_key():
+                        pub_pem2 = self._load_public_key_pem()
+                        if pub_pem2:
+                            try:
+                                return jwt.decode(raw, pub_pem2, algorithms=["RS256"],
+                                                  options={"verify_exp": False})
+                            except Exception:
+                                pass
+                    print("[PAMPA] Firma JWT inválida — token manipulado")
+                    self.clear_token()
+                    return None
+                except Exception as e:
+                    print(f"[PAMPA] Error verificando token RS256: {e}")
+                    # Expirado u otro error — retornar payload sin exp check para que
+                    # la lógica offline pueda seguir evaluando fechas
+                    try:
+                        return jwt.decode(raw, pub_pem, algorithms=["RS256"],
+                                          options={"verify_signature": True, "verify_exp": False})
+                    except Exception:
+                        return None
+            else:
+                # Sin clave pública cacheada: intentar obtenerla una vez
+                if self.fetch_and_cache_public_key():
+                    pub_pem = self._load_public_key_pem()
+                    if pub_pem:
+                        try:
+                            return jwt.decode(raw, pub_pem, algorithms=["RS256"],
+                                              options={"verify_exp": False})
+                        except Exception:
+                            pass
+                print("[PAMPA] Sin clave pública RSA — rechazando token RS256")
+                return None
+        else:
+            # Token HS256 legacy: decodificar sin verificar firma (sin secreto local)
+            try:
+                payload = jwt.decode(raw, options={"verify_signature": False})
+                return payload
+            except Exception as e:
+                print(f"[PAMPA] Error decodificando token: {e}")
+                return None
 
     def clear_token(self):
         """Elimina el token local"""
@@ -377,6 +453,8 @@ class PampaClient:
                     self.save_token(token)
                     self.save_last_seen_time()
                     print("[PAMPA] Token JWT guardado")
+                    # Actualizar clave pública RSA para verificación offline
+                    self.fetch_and_cache_public_key()
 
                 return result
             else:
@@ -467,6 +545,7 @@ class PampaClient:
                 if result.get('valid') and result.get('token'):
                     self.save_token(result['token'])
                     self.save_last_seen_time()
+                    self.fetch_and_cache_public_key()
                     print("[PAMPA] Token renovado silenciosamente")
 
                 return result

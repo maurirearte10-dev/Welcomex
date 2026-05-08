@@ -19,6 +19,7 @@ import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from datetime import datetime, timedelta
 import hashlib
+import secrets
 import uuid
 import socket
 import platform
@@ -820,8 +821,15 @@ class WelcomeXApp(ctk.CTk):
         return self.usuario_actual and self.usuario_actual.get('es_demo', False)
     
     def validar_accion_escritura(self, nombre_accion="esta acción"):
-        """Validar si puede hacer acciones de escritura — demo tiene acceso completo por 3 días"""
-        # En modo demo se permite todo (el acceso expira a los 3 días)
+        """Validar si puede hacer acciones de escritura — demo expira a los 3 días"""
+        if self.es_modo_demo():
+            if db.demo_expirada(self.machine_id) or self._demo_expirada_persistente():
+                self.mostrar_mensaje(
+                    "Demo Expirado",
+                    "El período de prueba ha terminado.\nActivá una licencia para continuar.",
+                    "warning"
+                )
+                return False
         return True
     
     def limpiar_ventana(self):
@@ -1118,8 +1126,8 @@ class WelcomeXApp(ctk.CTk):
         """Generar código de recuperación manual para un usuario"""
         import random
 
-        # Generar código de 6 dígitos
-        codigo = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        # Generar código de 6 dígitos con CSPRNG
+        codigo = f"{secrets.randbelow(1_000_000):06d}"
         expira = (datetime.now() + timedelta(hours=1)).isoformat()
 
         # Guardar en configuración temporal
@@ -1593,12 +1601,10 @@ class WelcomeXApp(ctk.CTk):
         )
         remember_check.pack(pady=(0, 2), padx=50, anchor="w")
 
-        # Cargar credenciales guardadas
+        # Cargar email guardado (la contraseña nunca se persiste)
         saved_email = db.get_config("remember_email")
-        saved_pass = db.get_config("remember_pass")
-        if saved_email and saved_pass:
+        if saved_email:
             entry_email.insert(0, saved_email)
-            entry_pass.insert(0, saved_pass)
             remember_var.set(True)
 
         # Botón "Olvidé mi contraseña"
@@ -1617,13 +1623,11 @@ class WelcomeXApp(ctk.CTk):
                 self.mostrar_mensaje(t("common.error"), t("login.error_empty"), "error")
                 return
 
-            # Guardar o borrar credenciales según checkbox
+            # Guardar o borrar email según checkbox (nunca se persiste la contraseña)
             if remember_var.get():
                 db.set_config("remember_email", email)
-                db.set_config("remember_pass", password)
             else:
                 db.set_config("remember_email", "")
-                db.set_config("remember_pass", "")
 
             # Intentar autenticar online con PAMPA primero
             from modules.pampa_client import PampaClient
@@ -2200,9 +2204,8 @@ class WelcomeXApp(ctk.CTk):
                     self.mostrar_mensaje("Error", "No existe una cuenta con ese email", "error")
                     return
 
-                # Generar código de 6 dígitos
-                import random
-                codigo = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+                # Generar código de 6 dígitos con CSPRNG
+                codigo = f"{secrets.randbelow(1_000_000):06d}"
                 expira = (datetime.now() + timedelta(hours=1)).isoformat()
 
                 # Guardar en configuración temporal
@@ -4803,7 +4806,7 @@ class WelcomeXApp(ctk.CTk):
                                f"Licencia creada correctamente\n\nUsuario: {nombre} {apellido}\nEmail: {email}\nContraseña: {password}\nPlan: {plan.upper()}\nDuración: {dias} días",
                                "success")
             
-            self.mostrar_admin()
+            self.mostrar_eventos()
         
         btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
         btn_frame.pack(fill="x", pady=15)
