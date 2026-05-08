@@ -5434,98 +5434,82 @@ class WelcomeXApp(ctk.CTk):
         
         def proceso():
             try:
+                import threading as _th_inv
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 nombre_evento = self.evento_activo['nombre'].replace(' ', '_')
-                
-                # Crear carpeta temporal
+
                 temp_dir = Path(tempfile.mkdtemp())
-                
+
                 total = len(invitados)
                 for i, invitado in enumerate(invitados, 1):
-                    # Nombre de archivo: Solo Apellido_Nombre (sin mesa)
                     nombre_archivo = f"{invitado['apellido']}_{invitado['nombre']}"
-                    
-                    # Actualizar progreso
+
                     progreso = i / total
-                    progress_bar.set(progreso)
-                    progress_text.configure(text=f"{int(progreso * 100)}%")
-                    status_label.configure(text=f"Generando: {invitado['apellido']}, {invitado['nombre']}")
-                    progress_window.update()
-                    
+                    _lbl = f"Generando: {invitado['apellido']}, {invitado['nombre']}"
+                    self.after(0, lambda p=progreso, l=_lbl: (
+                        progress_bar.set(p),
+                        progress_text.configure(text=f"{int(p * 100)}%"),
+                        status_label.configure(text=l),
+                    ))
+
                     if tipo == "personalizada":
-                        # Plantilla personalizada + QR
                         inv_dir = temp_dir / "invitaciones"
                         inv_dir.mkdir(exist_ok=True)
                         generar_invitacion(invitado, inv_dir / f"{nombre_archivo}.png")
                     elif tipo == "qr":
-                        # Solo QR
                         qr_dir = temp_dir / "qr_codes"
                         qr_dir.mkdir(exist_ok=True)
                         generar_qr_simple(invitado, qr_dir / f"{nombre_archivo}_QR.png")
-                
-                # Crear ZIP
-                status_label.configure(text="Creando archivo ZIP...")
-                progress_window.update()
-                
-                # DEBUG: Verificar archivos creados
+
+                self.after(0, lambda: status_label.configure(text="Creando archivo ZIP..."))
+
                 archivos_creados = list(temp_dir.rglob("*.png"))
-                print(f"\n[DEBUG] Archivos creados en temp:")
-                for f in archivos_creados:
-                    print(f"  - {f.name} ({f.stat().st_size} bytes)")
-                
+                print(f"\n[DEBUG] Archivos creados en temp: {len(archivos_creados)}")
+
                 if not archivos_creados:
                     print("[ERROR] No se crearon archivos PNG!")
-                    progress_window.destroy()
-                    self.mostrar_mensaje("Error", 
-                                       "No se generaron archivos.\n"
-                                       "Revisa la consola para más detalles.", 
-                                       "error")
+                    def _no_files():
+                        progress_window.destroy()
+                        self.mostrar_mensaje("Error",
+                            "No se generaron archivos.\nRevisa la consola para más detalles.", "error")
+                    self.after(0, _no_files)
                     return
-                
+
                 zip_filename = f"Invitaciones_{nombre_evento}_{timestamp}.zip"
                 ruta_ev = self.evento_activo.get('ruta_trabajo') if self.evento_activo else None
                 carpeta_zip = Path(ruta_ev) if ruta_ev else Path.home() / "Downloads"
                 carpeta_zip.mkdir(parents=True, exist_ok=True)
                 zip_path = carpeta_zip / zip_filename
-                
-                print(f"\n[DEBUG] Creando ZIP: {zip_path}")
-                
+
                 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                     for file_path in archivos_creados:
-                        arcname = file_path.relative_to(temp_dir)
-                        print(f"[DEBUG] Agregando al ZIP: {arcname}")
-                        zipf.write(file_path, arcname)
-                
-                print(f"[DEBUG] ZIP creado - Tamaño: {zip_path.stat().st_size} bytes")
-                
-                # Verificar contenido ZIP
+                        zipf.write(file_path, file_path.relative_to(temp_dir))
+
                 with zipfile.ZipFile(zip_path, 'r') as zipf:
                     contenido = zipf.namelist()
-                    print(f"[DEBUG] Contenido ZIP: {len(contenido)} archivos")
-                    for name in contenido[:5]:  # Mostrar primeros 5
-                        print(f"  - {name}")
-                
-                # Limpiar temporal
+
                 import shutil
                 shutil.rmtree(temp_dir)
-                
-                progress_window.destroy()
-                
-                # Mensaje de éxito
-                self.mostrar_mensaje("✅ Completado", 
-                                   f"Invitaciones generadas exitosamente!\n\n"
-                                   f"📁 Archivo: {zip_filename}\n"
-                                   f"📍 Ubicación: {zip_path.parent}\n\n"
-                                   f"Total: {len(invitados)} invitaciones\n"
-                                   f"Archivos en ZIP: {len(contenido)}",
-                                   "success")
-                
+
+                def _done(zf=zip_filename, zp=zip_path, c=contenido):
+                    progress_window.destroy()
+                    self.mostrar_mensaje("Completado",
+                        f"Invitaciones generadas exitosamente!\n\n"
+                        f"Archivo: {zf}\n"
+                        f"Ubicacion: {zp.parent}\n\n"
+                        f"Total: {len(invitados)} invitaciones\n"
+                        f"Archivos en ZIP: {len(c)}",
+                        "success")
+                self.after(0, _done)
+
             except Exception as e:
-                progress_window.destroy()
-                self.mostrar_mensaje("Error", f"Error al generar invitaciones:\n{str(e)}", "error")
-        
-        # Iniciar generación después de mostrar ventana
-        progress_window.after(100, proceso)
+                def _err(msg=str(e)):
+                    progress_window.destroy()
+                    self.mostrar_mensaje("Error", f"Error al generar invitaciones:\n{msg}", "error")
+                self.after(0, _err)
+
+        import threading as _th_proc
+        _th_proc.Thread(target=proceso, daemon=True).start()
     
     def generar_invitaciones(self, plantilla, config, tipo):
         """Generar invitaciones y crear ZIP"""
@@ -6284,104 +6268,113 @@ class WelcomeXApp(ctk.CTk):
                 return
 
             msg_label.configure(text="🔄 Verificando...", text_color=COLORS["warning"])
-            self.update()
 
-            try:
-                import requests as req_lib
-                import hashlib
-                password_hash = hashlib.sha256(password.encode()).hexdigest()
-                resp = req_lib.post(
-                    "https://pampaguazu.com.ar/api/v1/auth/login",
-                    json={"email": email, "password": password},
-                    timeout=10
-                )
-                data = resp.json()
-            except Exception as e:
-                msg_label.configure(text=f"❌ Sin conexión: {e}", text_color=COLORS["danger"])
-                return
-
-            if not data.get("success"):
-                msg_label.configure(
-                    text=f"❌ {data.get('error', 'Credenciales incorrectas')}",
-                    text_color=COLORS["danger"]
-                )
-                return
-
-            user_data = data.get("usuario", {})
-            user_rol = user_data.get("rol", "")
-
-            # Si es admin de PAMPA, entra directo sin necesitar licencia WelcomeX
-            if user_rol in ("admin", "superadmin"):
-                msg_label.configure(text="✅ Acceso admin", text_color=COLORS["success"])
-                # Sincronizar usuario local
-                db.connect()
+            def _do_login():
                 try:
-                    db.cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
-                    existing = db.cursor.fetchone()
-                    ph = hashlib.sha256(password.encode()).hexdigest()
-                    if existing:
-                        db.cursor.execute("UPDATE usuarios SET nombre=?, apellido=?, password=? WHERE email=?",
-                            (user_data.get('nombre',''), user_data.get('apellido',''), ph, email))
-                        local_id = existing['id']
+                    import requests as req_lib
+                    import hashlib
+                    resp = req_lib.post(
+                        "https://pampaguazu.com.ar/api/v1/auth/login",
+                        json={"email": email, "password": password},
+                        timeout=10
+                    )
+                    data = resp.json()
+                except Exception as e:
+                    self.after(0, lambda err=str(e): msg_label.configure(
+                        text=f"❌ Sin conexión: {err}", text_color=COLORS["danger"]))
+                    return
+
+                self.after(0, lambda d=data: _on_data(d))
+
+            def _on_data(data):
+                import hashlib
+                if not data.get("success"):
+                    msg_label.configure(
+                        text=f"❌ {data.get('error', 'Credenciales incorrectas')}",
+                        text_color=COLORS["danger"]
+                    )
+                    return
+
+                user_data = data.get("usuario", {})
+                user_rol = user_data.get("rol", "")
+
+                if user_rol in ("admin", "superadmin"):
+                    msg_label.configure(text="✅ Acceso admin", text_color=COLORS["success"])
+                    db.connect()
+                    try:
+                        db.cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
+                        existing = db.cursor.fetchone()
+                        ph = hashlib.sha256(password.encode()).hexdigest()
+                        if existing:
+                            db.cursor.execute("UPDATE usuarios SET nombre=?, apellido=?, password=? WHERE email=?",
+                                (user_data.get('nombre',''), user_data.get('apellido',''), ph, email))
+                            local_id = existing['id']
+                        else:
+                            import uuid as _uuid
+                            db.cursor.execute("""INSERT INTO usuarios (uuid,email,password,nombre,apellido,rol,activo,fecha_registro)
+                                VALUES (?,?,?,?,?,'admin',1,?)""",
+                                (_uuid.uuid4().hex, email, ph,
+                                 user_data.get('nombre',''), user_data.get('apellido',''),
+                                 datetime.now().isoformat()))
+                            local_id = db.cursor.lastrowid
+                        db.connection.commit()
+                    except Exception:
+                        local_id = 1
+                    finally:
+                        db.disconnect()
+                    self.usuario_actual = {
+                        "id": local_id,
+                        "email": email,
+                        "nombre": user_data.get('nombre',''),
+                        "apellido": user_data.get('apellido',''),
+                        "rol": "admin",
+                        "licencias": data.get("licencias", [])
+                    }
+                    self.after(800, self.mostrar_principal)
+                    return
+
+                licencias = data.get("licencias", [])
+                lic_wx = next(
+                    (l for l in licencias
+                     if "welcome" in (l.get("programa") or "").lower()
+                     and l.get("estado") == "active"),
+                    None
+                )
+
+                if not lic_wx:
+                    msg_label.configure(
+                        text="❌ No tenés una licencia activa de WelcomeX.\nContactá ventas@pampaguazu.com",
+                        text_color=COLORS["danger"]
+                    )
+                    return
+
+                license_key = lic_wx["license_key"]
+                msg_label.configure(text="🔄 Activando licencia...", text_color=COLORS["warning"])
+
+                def _do_activate():
+                    result = self.pampa.validate_license(license_key, force_online=True)
+                    self.after(0, lambda r=result: _on_activate(r))
+
+                def _on_activate(result):
+                    if result["valid"]:
+                        self.guardar_license_key(license_key)
+                        dias = result.get("days_remaining") or 0
+                        msg_label.configure(
+                            text=f"✅ ¡Bienvenido! Licencia activa — {dias} días restantes",
+                            text_color=COLORS["success"]
+                        )
+                        self.after(1500, self.reiniciar_app)
                     else:
-                        import uuid as _uuid
-                        db.cursor.execute("""INSERT INTO usuarios (uuid,email,password,nombre,apellido,rol,activo,fecha_registro)
-                            VALUES (?,?,?,?,?,'admin',1,?)""",
-                            (_uuid.uuid4().hex, email, ph,
-                             user_data.get('nombre',''), user_data.get('apellido',''),
-                             datetime.now().isoformat()))
-                        local_id = db.cursor.lastrowid
-                    db.connection.commit()
-                except Exception:
-                    local_id = 1
-                finally:
-                    db.disconnect()
-                self.usuario_actual = {
-                    "id": local_id,
-                    "email": email,
-                    "nombre": user_data.get('nombre',''),
-                    "apellido": user_data.get('apellido',''),
-                    "rol": "admin",
-                    "licencias": data.get("licencias", [])
-                }
-                self.after(800, self.mostrar_principal)
-                return
+                        msg_label.configure(
+                            text=f"❌ {result.get('message', 'Error al activar')}",
+                            text_color=COLORS["danger"]
+                        )
 
-            # Buscar licencia activa de WelcomeX
-            licencias = data.get("licencias", [])
-            lic_wx = next(
-                (l for l in licencias
-                 if "welcome" in (l.get("programa") or "").lower()
-                 and l.get("estado") == "active"),
-                None
-            )
+                import threading as _th_act
+                _th_act.Thread(target=_do_activate, daemon=True).start()
 
-            if not lic_wx:
-                msg_label.configure(
-                    text="❌ No tenés una licencia activa de WelcomeX.\nContactá ventas@pampaguazu.com",
-                    text_color=COLORS["danger"]
-                )
-                return
-
-            # Activar con la licencia encontrada
-            license_key = lic_wx["license_key"]
-            msg_label.configure(text="🔄 Activando licencia...", text_color=COLORS["warning"])
-            self.update()
-
-            result = self.pampa.validate_license(license_key, force_online=True)
-            if result["valid"]:
-                self.guardar_license_key(license_key)
-                dias = result.get("days_remaining") or 0
-                msg_label.configure(
-                    text=f"✅ ¡Bienvenido! Licencia activa — {dias} días restantes",
-                    text_color=COLORS["success"]
-                )
-                self.after(1500, self.reiniciar_app)
-            else:
-                msg_label.configure(
-                    text=f"❌ {result.get('message', 'Error al activar')}",
-                    text_color=COLORS["danger"]
-                )
+            import threading as _th_login
+            _th_login.Thread(target=_do_login, daemon=True).start()
 
         ctk.CTkButton(inner, text="Ingresar", command=ingresar,
                      height=50, width=250, font=("Arial", 16, "bold"),
