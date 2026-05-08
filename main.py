@@ -5433,6 +5433,7 @@ class WelcomeXApp(ctk.CTk):
                 traceback.print_exc()
         
         def proceso():
+            temp_dir = None
             try:
                 import threading as _th_inv
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -5507,6 +5508,13 @@ class WelcomeXApp(ctk.CTk):
                     progress_window.destroy()
                     self.mostrar_mensaje("Error", f"Error al generar invitaciones:\n{msg}", "error")
                 self.after(0, _err)
+            finally:
+                if temp_dir and temp_dir.exists():
+                    import shutil as _shutil
+                    try:
+                        _shutil.rmtree(temp_dir)
+                    except Exception:
+                        pass
 
         import threading as _th_proc
         _th_proc.Thread(target=proceso, daemon=True).start()
