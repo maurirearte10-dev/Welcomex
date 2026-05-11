@@ -150,17 +150,28 @@ class KioscoWindow(ctk.CTkToplevel):
             print(f"[KIOSCO {kiosco_id}] ⚠️ Error iniciando listener: {e}")
 
         # F11 y Escape se manejan en on_key_press_global (suppress=True bloquea tkinter bindings)
-        
+
+        # Bloquear cierre por Alt+F4 / botón X del window manager
+        self.protocol("WM_DELETE_WINDOW", self._on_close_attempt)
+
         # FIX: Variable para prevenir recursión
         self._fix_in_progress = False
-        
+
+        # Contador de clicks en esquina superior izquierda para salida de emergencia
+        self._emergency_clicks = 0
+        self._emergency_click_timer = None
+
         # FIX: Bindings para prevenir bugs de rendering (sin recursión)
         self.bind('<FocusIn>', self.on_window_focus_safe)
         
         # Frame principal (negro)
         self.main_frame = ctk.CTkFrame(self, fg_color="#000000")
         self.main_frame.pack(fill="both", expand=True)
-        
+
+        # Salida de emergencia: 5 clicks en esquina superior izquierda (60x60 px)
+        self.main_frame.bind('<Button-1>', self._on_emergency_corner_click)
+        self.bind('<Button-1>', self._on_emergency_corner_click)
+
         # Label para video
         self.video_label = ctk.CTkLabel(self.main_frame, text="")
         self.video_label.place(x=0, y=0, relwidth=1, relheight=1)
@@ -985,7 +996,7 @@ class KioscoWindow(ctk.CTkToplevel):
                 self.after(0, self.toggle_fullscreen)
                 return
             elif key == keyboard.Key.esc:
-                self.after(0, self.cerrar_directo)
+                # Escape NO cierra el kiosco directamente — ignorar silenciosamente
                 return
             elif key == keyboard.Key.f5:
                 self.after(0, self.repetir_ultima_acreditacion)
@@ -1048,6 +1059,107 @@ class KioscoWindow(ctk.CTkToplevel):
             except:
                 pass
     
+    def _on_close_attempt(self):
+        """Intercepta Alt+F4 y el botón X del window manager — ignora sin contraseña."""
+        print(f"[KIOSCO {self.kiosco_id}] Intento de cierre bloqueado (Alt+F4 / WM_DELETE_WINDOW)")
+        # Restaurar foco y topmost por si el WM los hubiera quitado
+        try:
+            self.attributes('-topmost', True)
+            self.focus_force()
+        except Exception:
+            pass
+
+    def _on_emergency_corner_click(self, event=None):
+        """Click en esquina superior izquierda (zona 60x60 px).
+        5 clicks en menos de 3 s → solicita contraseña de admin para cerrar."""
+        try:
+            if not (event.x < 60 and event.y < 60):
+                return
+        except Exception:
+            return
+
+        self._emergency_clicks += 1
+        print(f"[KIOSCO] Salida emergencia: {self._emergency_clicks}/5 clicks")
+
+        # Cancelar timer anterior y reiniciar ventana de 3 s
+        if self._emergency_click_timer:
+            self.after_cancel(self._emergency_click_timer)
+        self._emergency_click_timer = self.after(3000, self._reset_emergency_clicks)
+
+        if self._emergency_clicks >= 5:
+            self._reset_emergency_clicks()
+            self.after(0, self._pedir_password_salida)
+
+    def _reset_emergency_clicks(self):
+        self._emergency_clicks = 0
+        self._emergency_click_timer = None
+
+    def _pedir_password_salida(self):
+        """Diálogo de contraseña para salida de emergencia del kiosco."""
+        import tkinter as tk
+        from tkinter import simpledialog
+        import hashlib
+
+        # Pausar el listener global temporalmente para que el diálogo reciba teclas
+        if self.keyboard_listener:
+            try:
+                self.keyboard_listener.stop()
+            except Exception:
+                pass
+            self.keyboard_listener = None
+
+        try:
+            pw = simpledialog.askstring(
+                "Salida de emergencia",
+                "Ingresá la contraseña de administrador:",
+                show="*",
+                parent=self
+            )
+        except Exception:
+            pw = None
+        finally:
+            # Reiniciar listener global siempre
+            from pynput import keyboard as _kb
+            try:
+                self.keyboard_listener = _kb.Listener(
+                    on_press=self.on_key_press_global,
+                    suppress=True
+                )
+                self.keyboard_listener.start()
+            except Exception:
+                pass
+
+        if not pw:
+            return
+
+        # Verificar contra la base de datos local
+        try:
+            from modules.database import DatabaseManager
+            db = DatabaseManager()
+            import hashlib as _hl
+            pw_hash = _hl.sha256(pw.encode()).hexdigest()
+            db.connect()
+            db.cursor.execute(
+                "SELECT id FROM usuarios WHERE password=? AND activo=1 AND rol IN ('admin','superadmin')",
+                (pw_hash,)
+            )
+            ok = db.cursor.fetchone() is not None
+            db.cursor.close()
+        except Exception as e:
+            print(f"[KIOSCO] Error verificando password: {e}")
+            ok = False
+
+        if ok:
+            print(f"[KIOSCO {self.kiosco_id}] Salida de emergencia autorizada")
+            self.cerrar_directo()
+        else:
+            print(f"[KIOSCO {self.kiosco_id}] Contraseña incorrecta — salida denegada")
+            try:
+                import tkinter.messagebox as mb
+                mb.showerror("Acceso denegado", "Contraseña incorrecta.", parent=self)
+            except Exception:
+                pass
+
     def cerrar_directo(self):
         """Cerrar sin preguntar"""
         print(f"[KIOSCO {self.kiosco_id}] Cerrando...")

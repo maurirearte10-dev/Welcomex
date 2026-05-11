@@ -6,6 +6,7 @@ SQLite con todas las tablas necesarias
 import sqlite3
 import os
 import hashlib
+import secrets
 import uuid
 from datetime import datetime, timedelta
 from config.settings import DATABASE_PATH
@@ -258,10 +259,11 @@ class DatabaseManager:
         count = self.cursor.fetchone()['count']
         
         if count == 0:
-            # Crear super admin automáticamente
-            password_hash = hashlib.sha256("Malvinas!09".encode()).hexdigest()
+            # Generar contraseña aleatoria en el primer arranque
+            temp_password = secrets.token_urlsafe(16)
+            password_hash = hashlib.sha256(temp_password.encode()).hexdigest()
             user_uuid = str(uuid.uuid4())
-            
+
             self.cursor.execute("""
                 INSERT INTO usuarios (uuid, email, password, nombre, apellido, rol, activo, fecha_registro)
                 VALUES (?, ?, ?, ?, ?, ?, 1, ?)
@@ -274,11 +276,25 @@ class DatabaseManager:
                 "super_admin",
                 datetime.now().isoformat()
             ))
-            
+
             self.connection.commit()
-            print("✅ Super Admin creado automáticamente")
-            print("   Email: mrearte21@hotmail.com")
-            print("   Password: Malvinas!09")
+            print("=" * 60)
+            print("✅ Super Admin creado — GUARDÁ ESTA CONTRASEÑA")
+            print("   Email   : mrearte21@hotmail.com")
+            print(f"   Password: {temp_password}")
+            print("   (Solo se muestra una vez — cambiala en Configuración)")
+            print("=" * 60)
+
+            # Guardar la contraseña temporal en un archivo de primer arranque
+            try:
+                first_run_file = os.path.join(os.path.dirname(self.db_path), "PRIMERA_VEZ.txt")
+                with open(first_run_file, "w", encoding="utf-8") as f:
+                    f.write(f"WelcomeX - Credenciales iniciales\n")
+                    f.write(f"Email   : mrearte21@hotmail.com\n")
+                    f.write(f"Password: {temp_password}\n")
+                    f.write(f"\nEliminá este archivo después de cambiar la contraseña.\n")
+            except Exception:
+                pass
         
         self.disconnect()
     
