@@ -7,6 +7,7 @@ import platform
 import uuid
 import subprocess
 import hashlib
+import hmac
 import json
 import base64
 import socket
@@ -226,13 +227,10 @@ class PampaClient:
                 print("[PAMPA] Sin clave pública RSA — rechazando token RS256")
                 return None
         else:
-            # Token HS256 legacy: decodificar sin verificar firma (sin secreto local)
-            try:
-                payload = jwt.decode(raw, options={"verify_signature": False})
-                return payload
-            except Exception as e:
-                print(f"[PAMPA] Error decodificando token: {e}")
-                return None
+            # Tokens HS256 ya no se aceptan — requieren re-activación con RS256
+            print("[PAMPA] Token HS256 rechazado — se requiere nueva activación")
+            self.clear_token()
+            return None
 
     def clear_token(self):
         """Elimina el token local"""
@@ -247,24 +245,40 @@ class PampaClient:
     # PROTECCIÓN ANTI-MANIPULACIÓN DE RELOJ
     # ==============================================
 
+    def _timestamp_hmac_key(self) -> bytes:
+        """Deriva la clave HMAC del hardware fingerprint para proteger lasttime.dat."""
+        return self.get_hardware_hash().encode()
+
     def save_last_seen_time(self):
-        """Guarda el timestamp actual como última hora conocida (nunca retrocede)"""
+        """Guarda el timestamp con HMAC para detectar manipulación manual del archivo."""
         try:
             now = datetime.now()
             current = self.load_last_seen_time()
             time_to_save = max(now, current) if current else now
+            ts = time_to_save.isoformat()
+            sig = hmac.new(self._timestamp_hmac_key(), ts.encode(), hashlib.sha256).hexdigest()
             with open(self.timestamp_file, 'w') as f:
-                f.write(time_to_save.isoformat())
+                f.write(f"{ts}|{sig}")
         except:
             pass
 
     def load_last_seen_time(self) -> Optional[datetime]:
-        """Carga la última hora conocida del sistema"""
+        """Carga el timestamp y valida firma HMAC. Retorna None si está manipulado."""
         if not self.timestamp_file.exists():
             return None
         try:
-            with open(self.timestamp_file, 'r') as f:
-                return datetime.fromisoformat(f.read().strip())
+            content = open(self.timestamp_file, 'r').read().strip()
+            if '|' not in content:
+                # Archivo sin firma (formato viejo) — descartar
+                self.timestamp_file.unlink(missing_ok=True)
+                return None
+            ts, sig = content.rsplit('|', 1)
+            expected = hmac.new(self._timestamp_hmac_key(), ts.encode(), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(sig, expected):
+                print("[PAMPA] ⚠️ lasttime.dat con firma inválida — posible manipulación")
+                self.timestamp_file.unlink(missing_ok=True)
+                return None
+            return datetime.fromisoformat(ts)
         except:
             return None
 
@@ -609,10 +623,13 @@ class PampaClient:
     # ==============================================
 
     def get_license_status(self, license_key: str) -> Optional[dict]:
-        """Obtiene el estado de una licencia (sin validar hardware)"""
+        """Obtiene el estado de una licencia enviando el JWT local como Bearer auth."""
         try:
+            token_str = self.load_token_raw()
+            headers = {"Authorization": f"Bearer {token_str}"} if token_str else {}
             response = requests.get(
                 f"{self.api_url}/api/v1/license/{license_key}/status",
+                headers=headers,
                 timeout=10
             )
             if response.status_code == 200:
