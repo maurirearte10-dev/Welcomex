@@ -251,9 +251,16 @@ class DatabaseManager:
                 self.cursor.execute("ALTER TABLE eventos ADD COLUMN ruta_trabajo TEXT")
                 self.connection.commit()
                 print("[MIGRACIÓN] ✅ Columna ruta_trabajo agregada")
+            # Índice único para evitar que el mismo invitado gane dos veces en el mismo sorteo
+            self.cursor.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_sorteos_evento_invitado
+                ON sorteos(evento_id, invitado_id)
+            """)
+            self.connection.commit()
+
         except Exception as e:
             print(f"[MIGRACIÓN] Error: {e}")
-        
+
         # Crear super admin por defecto si no existe
         self.cursor.execute("SELECT COUNT(*) as count FROM usuarios")
         count = self.cursor.fetchone()['count']
@@ -894,14 +901,44 @@ class DatabaseManager:
                 INSERT INTO sorteos (evento_id, invitado_id, tipo, mesa, fecha_sorteo)
                 VALUES (?, ?, ?, ?, ?)
             """, (evento_id, invitado_id, tipo, mesa, datetime.now().isoformat()))
-            
+
             self.connection.commit()
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
         finally:
             self.disconnect()
-    
+
+    def registrar_ganadores_bulk(self, ganadores):
+        """Registrar múltiples ganadores en una sola transacción atómica.
+
+        Args:
+            ganadores: lista de dicts con claves evento_id, invitado_id, tipo, mesa (opcional)
+
+        Returns:
+            {"success": True} si todos se insertaron correctamente,
+            {"success": False, "error": ...} si ocurrió algún error (ninguno queda registrado).
+        """
+        self.connect()
+        try:
+            ahora = datetime.now().isoformat()
+            self.cursor.execute("BEGIN")
+            for g in ganadores:
+                self.cursor.execute("""
+                    INSERT INTO sorteos (evento_id, invitado_id, tipo, mesa, fecha_sorteo)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (g['evento_id'], g['invitado_id'], g['tipo'], g.get('mesa'), ahora))
+            self.connection.commit()
+            return {"success": True}
+        except Exception as e:
+            try:
+                self.connection.rollback()
+            except Exception:
+                pass
+            return {"success": False, "error": str(e)}
+        finally:
+            self.disconnect()
+
     def obtener_ganadores(self, evento_id):
         """Obtener ganadores de sorteos"""
         self.connect()

@@ -3964,42 +3964,60 @@ class WelcomeXApp(ctk.CTk):
                      height=50, font=("Arial", 14), width=400,
                      fg_color=COLORS["warning"]).pack(pady=15)
         
+        # Etiqueta de estado para mostrar progreso durante la importación
+        status_label = ctk.CTkLabel(container, text="", font=("Arial", 13),
+                                    text_color=COLORS["primary"])
+        status_label.pack(pady=(5, 0))
+
+        def _on_import_done(resultado):
+            """Callback en el hilo principal cuando termina la importación"""
+            try:
+                d.destroy()
+            except Exception:
+                pass
+            if resultado["success"]:
+                mensaje = f"Importación completada!\n\nTotal: {resultado['total']}\nExitosos: {resultado['exitosos']}"
+                if resultado.get('saltados'):
+                    mensaje += f"\nSaltados: {len(resultado['saltados'])}"
+                if resultado.get('errores'):
+                    mensaje += f"\n\nErrores:\n"
+                    for err in resultado['errores'][:5]:
+                        mensaje += f"• {err}\n"
+                    if len(resultado['errores']) > 5:
+                        mensaje += f"... y {len(resultado['errores']) - 5} más"
+                self.mostrar_mensaje("Importación Completada", mensaje,
+                                     "success" if not resultado.get('errores') else "warning")
+                self.ver_invitados(self.evento_activo)
+            else:
+                self.mostrar_mensaje("Error", resultado.get("error", "Error al importar"), "error")
+
+        def _do_import(filepath):
+            """Importación en hilo secundario para no bloquear la UI"""
+            try:
+                from modules.csv_importer import CSVImporter
+                importer = CSVImporter(self.evento_activo['id'])
+                resultado = importer.importar_archivo(filepath)
+                self.after(0, lambda: _on_import_done(resultado))
+            except Exception as e:
+                self.after(0, lambda err=e: (
+                    (lambda: d.destroy())(),
+                    self.mostrar_mensaje("Error", f"Error al importar: {str(err)}", "error")
+                ))
+
         def seleccionar():
             filepath = filedialog.askopenfilename(
                 title="Seleccionar archivo Excel",
                 filetypes=[("Excel", "*.xlsx *.xls"), ("Todos", "*.*")]
             )
-            
+
             if not filepath:
                 return
-            
-            d.destroy()
-            
-            try:
-                from modules.csv_importer import CSVImporter
-                importer = CSVImporter(self.evento_activo['id'])
-                resultado = importer.importar_archivo(filepath)
-                
-                if resultado["success"]:
-                    mensaje = f"Importación completada!\n\nTotal: {resultado['total']}\nExitosos: {resultado['exitosos']}"
-                    
-                    if resultado.get('saltados'):
-                        mensaje += f"\nSaltados: {len(resultado['saltados'])}"
-                    
-                    if resultado.get('errores'):
-                        mensaje += f"\n\nErrores:\n"
-                        for err in resultado['errores'][:5]:
-                            mensaje += f"• {err}\n"
-                        if len(resultado['errores']) > 5:
-                            mensaje += f"... y {len(resultado['errores']) - 5} más"
-                    
-                    self.mostrar_mensaje("Importación Completada", mensaje, "success" if not resultado.get('errores') else "warning")
-                    self.ver_invitados(self.evento_activo)
-                else:
-                    self.mostrar_mensaje("Error", resultado.get("error", "Error al importar"), "error")
-            except Exception as e:
-                self.mostrar_mensaje("Error", f"Error al importar: {str(e)}", "error")
-        
+
+            # Mostrar indicador de progreso y deshabilitar botones mientras importa
+            status_label.configure(text="⏳ Importando... por favor espera")
+            import threading
+            threading.Thread(target=lambda: _do_import(filepath), daemon=True).start()
+
         ctk.CTkButton(container, text="📂 Seleccionar Archivo Excel", command=seleccionar,
                      height=55, font=("Arial", 16, "bold"), width=400,
                      fg_color=COLORS["primary"]).pack(pady=20)
@@ -4064,6 +4082,19 @@ class WelcomeXApp(ctk.CTk):
     def realizar_sorteo(self):
         """Diálogo para configurar sorteo"""
         if not self.validar_accion_escritura("realizar sorteos"):
+            return
+
+        # Verificar que el plan del usuario incluye sorteos
+        plan = self.usuario_actual.get('plan') if self.usuario_actual else None
+        plan_data = PLANES.get(plan, {})
+        es_super_admin = self.usuario_actual and self.usuario_actual.get('rol') == 'super_admin'
+        if not es_super_admin and not plan_data.get('sorteos', False):
+            self.mostrar_mensaje(
+                "Plan no incluye sorteos",
+                f"Tu plan actual ({plan or 'sin plan'}) no incluye la función de sorteos.\n"
+                "Actualizá tu plan para usar esta función.",
+                "warning"
+            )
             return
 
         participantes = db.obtener_invitados_presentes(self.evento_activo['id'])
@@ -4183,9 +4214,16 @@ class WelcomeXApp(ctk.CTk):
         # Sortear
         ganadores = random.sample(participantes, cantidad)
 
-        # Registrar en DB
-        for ganador in ganadores:
-            db.registrar_ganador(self.evento_activo['id'], ganador['id'], "general", ganador.get('mesa'))
+        # Registrar en DB de forma atómica (todo-o-nada)
+        registros = [
+            {'evento_id': self.evento_activo['id'], 'invitado_id': g['id'],
+             'tipo': 'general', 'mesa': g.get('mesa')}
+            for g in ganadores
+        ]
+        resultado_db = db.registrar_ganadores_bulk(registros)
+        if not resultado_db["success"]:
+            self.mostrar_mensaje("Error", f"No se pudo registrar el sorteo: {resultado_db.get('error', '')}", "error")
+            return
 
         # Mostrar con animación (funciona para 1 o múltiples ganadores)
         def on_complete():
@@ -4223,7 +4261,17 @@ class WelcomeXApp(ctk.CTk):
         for mesa, personas in mesas.items():
             ganador = random.choice(personas)
             ganadores_dict[mesa] = ganador
-            db.registrar_ganador(self.evento_activo['id'], ganador['id'], "por_mesa", mesa)
+
+        # Registrar todos los ganadores de forma atómica (todo-o-nada)
+        registros = [
+            {'evento_id': self.evento_activo['id'], 'invitado_id': g['id'],
+             'tipo': 'por_mesa', 'mesa': mesa}
+            for mesa, g in ganadores_dict.items()
+        ]
+        resultado_db = db.registrar_ganadores_bulk(registros)
+        if not resultado_db["success"]:
+            self.mostrar_mensaje("Error", f"No se pudo registrar el sorteo: {resultado_db.get('error', '')}", "error")
+            return
 
         # Mostrar con animación secuencial por mesa
         def on_complete():
