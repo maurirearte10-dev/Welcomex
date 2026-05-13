@@ -160,6 +160,9 @@ class KioscoWindow(ctk.CTkToplevel):
         # Contador de clicks en esquina superior izquierda para salida de emergencia
         self._emergency_clicks = 0
         self._emergency_click_timer = None
+        # Rate limiting: bloqueo tras intentos fallidos de contraseña
+        self._emergency_failed_attempts = 0
+        self._emergency_blocked_until = 0.0
 
         # FIX: Bindings para prevenir bugs de rendering (sin recursión)
         self.bind('<FocusIn>', self.on_window_focus_safe)
@@ -1099,6 +1102,18 @@ class KioscoWindow(ctk.CTkToplevel):
         import tkinter as tk
         from tkinter import simpledialog
         import hashlib
+        import time
+
+        # Rate limiting: bloquear 60s tras 3 intentos fallidos
+        now = time.time()
+        if now < self._emergency_blocked_until:
+            remaining = int(self._emergency_blocked_until - now)
+            try:
+                import tkinter.messagebox as mb
+                mb.showwarning("Bloqueado", f"Demasiados intentos fallidos. Esperá {remaining}s.", parent=self)
+            except Exception:
+                pass
+            return
 
         # Pausar el listener global temporalmente para que el diálogo reciba teclas
         if self.keyboard_listener:
@@ -1151,12 +1166,21 @@ class KioscoWindow(ctk.CTkToplevel):
 
         if ok:
             print(f"[KIOSCO {self.kiosco_id}] Salida de emergencia autorizada")
+            self._emergency_failed_attempts = 0
             self.cerrar_directo()
         else:
-            print(f"[KIOSCO {self.kiosco_id}] Contraseña incorrecta — salida denegada")
+            self._emergency_failed_attempts += 1
+            print(f"[KIOSCO {self.kiosco_id}] Contraseña incorrecta — intento {self._emergency_failed_attempts}")
+            if self._emergency_failed_attempts >= 3:
+                import time as _t
+                self._emergency_blocked_until = _t.time() + 60
+                self._emergency_failed_attempts = 0
+                msg = "Acceso denegado. Sistema bloqueado 60 segundos por múltiples intentos fallidos."
+            else:
+                msg = f"Contraseña incorrecta. Intento {self._emergency_failed_attempts}/3."
             try:
                 import tkinter.messagebox as mb
-                mb.showerror("Acceso denegado", "Contraseña incorrecta.", parent=self)
+                mb.showerror("Acceso denegado", msg, parent=self)
             except Exception:
                 pass
 
