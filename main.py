@@ -1911,8 +1911,10 @@ class WelcomeXApp(ctk.CTk):
         # Crear evento demo si no existe
         self.crear_evento_demo()
 
-        # Login como usuario demo
-        resultado = db.autenticar_usuario("demo@welcomex.com", "Demo2026!")
+        # Login como usuario demo — contraseña derivada del machine_id (única por equipo)
+        import hashlib
+        _demo_pwd = hashlib.sha256(f"demo-{self.machine_id}".encode()).hexdigest()[:24]
+        resultado = db.autenticar_usuario("demo@welcomex.com", _demo_pwd)
 
         if resultado["success"]:
             self.usuario_actual = resultado["usuario"]
@@ -1956,8 +1958,10 @@ class WelcomeXApp(ctk.CTk):
                     # Reparar evento demo si le falta el video_loop
                     self._reparar_videos_demo(evento_demo)
             else:
-                # Crear usuario demo desde cero
-                resultado = db.crear_usuario("demo@welcomex.com", "Demo2026!", 
+                # Crear usuario demo desde cero — contraseña única por máquina
+                import hashlib
+                _demo_pwd = hashlib.sha256(f"demo-{self.machine_id}".encode()).hexdigest()[:24]
+                resultado = db.crear_usuario("demo@welcomex.com", _demo_pwd,
                                             "Usuario", "Demo", "admin", None)
                 
                 if resultado["success"]:

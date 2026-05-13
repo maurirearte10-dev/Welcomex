@@ -292,14 +292,14 @@ class DatabaseManager:
             print("   (Solo se muestra una vez — cambiala en Configuración)")
             print("=" * 60)
 
-            # Guardar la contraseña temporal en un archivo de primer arranque
+            # Aviso de primer arranque SIN contraseña (la password solo se muestra en consola)
             try:
                 first_run_file = os.path.join(os.path.dirname(self.db_path), "PRIMERA_VEZ.txt")
                 with open(first_run_file, "w", encoding="utf-8") as f:
-                    f.write(f"WelcomeX - Credenciales iniciales\n")
-                    f.write(f"Email   : mrearte21@hotmail.com\n")
-                    f.write(f"Password: {temp_password}\n")
-                    f.write(f"\nEliminá este archivo después de cambiar la contraseña.\n")
+                    f.write("WelcomeX - Primer arranque\n")
+                    f.write(f"Email: mrearte21@hotmail.com\n")
+                    f.write("La contraseña temporal fue mostrada en la consola al iniciar.\n")
+                    f.write("Cambiala en Configuracion > Usuarios y luego eliminá este archivo.\n")
             except Exception:
                 pass
         

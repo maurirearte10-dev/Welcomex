@@ -44,39 +44,43 @@ class PampaClient:
     # HARDWARE FINGERPRINT
     # ==============================================
 
+    @staticmethod
+    def _ps(cmd: str) -> str:
+        """Ejecuta un comando PowerShell sin shell=True para evitar injection."""
+        try:
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
+                capture_output=True, text=True, timeout=8,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            return r.stdout.strip()
+        except Exception:
+            return ""
+
     def get_cpu_id(self) -> str:
         try:
             if platform.system() == "Windows":
-                result = subprocess.check_output(
-                    "wmic cpu get ProcessorId", shell=True
-                ).decode().strip().split('\n')[1].strip()
-                return result
-            else:
-                return str(uuid.getnode())
+                out = self._ps("(Get-CimInstance Win32_Processor | Select-Object -First 1).ProcessorId")
+                return out if out else "CPU_UNKNOWN"
+            return str(uuid.getnode())
         except:
             return "CPU_UNKNOWN"
 
     def get_motherboard_serial(self) -> str:
         try:
             if platform.system() == "Windows":
-                result = subprocess.check_output(
-                    "wmic baseboard get SerialNumber", shell=True
-                ).decode().strip().split('\n')[1].strip()
-                return result if result else "MB_UNKNOWN"
-            else:
-                return "MB_UNKNOWN"
+                out = self._ps("(Get-CimInstance Win32_BaseBoard).SerialNumber")
+                return out if out else "MB_UNKNOWN"
+            return "MB_UNKNOWN"
         except:
             return "MB_UNKNOWN"
 
     def get_disk_serial(self) -> str:
         try:
             if platform.system() == "Windows":
-                result = subprocess.check_output(
-                    "wmic diskdrive get SerialNumber", shell=True
-                ).decode().strip().split('\n')[1].strip()
-                return result if result else "DISK_UNKNOWN"
-            else:
-                return "DISK_UNKNOWN"
+                out = self._ps("(Get-CimInstance Win32_DiskDrive | Select-Object -First 1).SerialNumber")
+                return out if out else "DISK_UNKNOWN"
+            return "DISK_UNKNOWN"
         except:
             return "DISK_UNKNOWN"
 
@@ -91,12 +95,10 @@ class PampaClient:
     def get_system_uuid(self) -> str:
         try:
             if platform.system() == "Windows":
-                result = subprocess.check_output(
-                    "wmic csproduct get UUID", shell=True
-                ).decode().strip().split('\n')[1].strip()
-                return result if result else str(uuid.uuid4())
-            else:
-                return str(uuid.uuid4())
+                out = self._ps("(Get-CimInstance Win32_ComputerSystemProduct).UUID")
+                invalid = {"", "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF", "03000200-0400-0500-0006-000700080009"}
+                return out if out and out not in invalid else str(uuid.uuid4())
+            return str(uuid.uuid4())
         except:
             return str(uuid.uuid4())
 
