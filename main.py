@@ -1542,122 +1542,180 @@ class WelcomeXApp(ctk.CTk):
                      font=("Arial", 13)).pack(fill="x", pady=(5, 0))
 
     def mostrar_login(self):
-        """Pantalla de login"""
+        """Pantalla de login — tarjeta centrada sobre fondo oscuro"""
         self.limpiar_ventana()
 
-        frame = ctk.CTkFrame(self, fg_color=COLORS["bg"])
-        frame.pack(expand=True)
+        # Fondo oscuro liso
+        bg = ctk.CTkFrame(self, fg_color=COLORS["bg"])
+        bg.pack(fill="both", expand=True)
 
-        # Selector de idioma arriba
-        self.mostrar_selector_idioma(frame)
+        # ── Tarjeta centrada ──────────────────────────────────────────────────
+        rim = ctk.CTkFrame(bg, fg_color=COLORS["primary"], corner_radius=28)
+        rim.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Logo
-        ctk.CTkLabel(frame, text=t("app.title"), font=("Arial", 40, "bold"),
-                    text_color=COLORS["primary"]).pack(pady=(15, 5))
-        ctk.CTkLabel(frame, text=t("app.subtitle"),
-                    font=("Arial", 14), text_color=COLORS["text_light"]).pack(pady=(0, 20))
+        inner = ctk.CTkFrame(rim, fg_color="#1a1a2e", corner_radius=26)
+        inner.pack(padx=2, pady=2)
 
-        # Email
-        ctk.CTkLabel(frame, text=t("login.email"), anchor="w", font=("Arial", 13)).pack(fill="x", padx=50)
-        entry_email = ctk.CTkEntry(frame, width=450, height=45, font=("Arial", 15),
-                                   fg_color=COLORS["card"], border_color=COLORS["border"])
-        entry_email.pack(pady=(5, 12), padx=50)
+        card = ctk.CTkFrame(inner, fg_color="#0f0f0f", corner_radius=22)
+        card.pack(padx=3, pady=3)
 
-        # Password con toggle mostrar/ocultar
-        ctk.CTkLabel(frame, text=t("login.password"), anchor="w", font=("Arial", 13)).pack(fill="x", padx=50)
-        pass_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        pass_frame.pack(fill="x", padx=50, pady=(5, 5))
+        # ── Logo ──────────────────────────────────────────────────────────────
+        ctk.CTkLabel(card, text="✦",
+                     font=ctk.CTkFont(size=48),
+                     text_color=COLORS["primary"]).pack(pady=(32, 2))
+        ctk.CTkLabel(card, text=t("app.title"),
+                     font=ctk.CTkFont(size=26, weight="bold"),
+                     text_color=COLORS["primary"]).pack()
+        ctk.CTkLabel(card, text=f"v{APP_VERSION}",
+                     font=ctk.CTkFont(size=11),
+                     text_color=COLORS["text_light"]).pack(pady=(0, 6))
 
-        entry_pass = ctk.CTkEntry(pass_frame, width=400, height=45, show="●", font=("Arial", 15),
-                                 fg_color=COLORS["card"], border_color=COLORS["border"])
-        entry_pass.pack(side="left")
+        ctk.CTkFrame(card, fg_color=COLORS["border"], height=1,
+                     corner_radius=0).pack(fill="x", padx=32, pady=(4, 20))
 
-        # Variable de estado para el toggle (más confiable que cget)
-        password_visible = {"state": False}
+        ctk.CTkLabel(card, text=t("login.sign_in"),
+                     font=ctk.CTkFont(size=14, weight="bold"),
+                     text_color=COLORS["text"]).pack(pady=(0, 14))
 
-        def toggle_password():
-            password_visible["state"] = not password_visible["state"]
-            if password_visible["state"]:
-                entry_pass.configure(show="")
-                btn_eye.configure(text="🙈")
-            else:
-                entry_pass.configure(show="●")
-                btn_eye.configure(text="👁")
+        # ── Campos ────────────────────────────────────────────────────────────
+        entry_email = ctk.CTkEntry(card, placeholder_text=t("login.email"),
+                                   width=300, height=42, font=ctk.CTkFont(size=13),
+                                   fg_color="#1a1a2e", border_color=COLORS["border"])
+        entry_email.pack(pady=(0, 8), padx=32)
 
-        btn_eye = ctk.CTkButton(pass_frame, text="👁", width=45, height=45,
-                               fg_color=COLORS["card"], hover_color=COLORS["border"],
-                               command=toggle_password, font=("Arial", 16))
-        btn_eye.pack(side="left", padx=(5, 0))
+        pass_cont = ctk.CTkFrame(card, fg_color="#1a1a2e", corner_radius=8,
+                                 border_width=1, border_color=COLORS["border"],
+                                 width=300, height=42)
+        pass_cont.pack(pady=(0, 8), padx=32)
+        pass_cont.pack_propagate(False)
 
-        # Checkbox "Recuérdame"
+        _pass_vis = {"v": False}
+        entry_pass = ctk.CTkEntry(pass_cont, placeholder_text=t("login.password"),
+                                  show="•", border_width=0, fg_color="transparent",
+                                  width=254, height=38, font=ctk.CTkFont(size=13))
+        entry_pass.pack(side="left", padx=(6, 0))
+
+        def _toggle():
+            _pass_vis["v"] = not _pass_vis["v"]
+            entry_pass.configure(show="" if _pass_vis["v"] else "•")
+
+        ctk.CTkButton(pass_cont, text="👁", width=36, height=34,
+                      fg_color="transparent", text_color=COLORS["text_light"],
+                      hover_color="#1a1a2e", command=_toggle).pack(side="right", padx=(0, 3))
+
+        # ── Remember me + olvidé contraseña ───────────────────────────────────
+        row = ctk.CTkFrame(card, fg_color="transparent")
+        row.pack(fill="x", padx=32, pady=(2, 0))
+
         remember_var = ctk.BooleanVar(value=False)
-        remember_check = ctk.CTkCheckBox(
-            frame, text=t("login.remember_me"),
-            variable=remember_var,
-            font=("Arial", 13),
-            text_color=COLORS["text_light"],
-            fg_color=COLORS["primary"],
-            hover_color=COLORS["primary"]
-        )
-        remember_check.pack(pady=(0, 2), padx=50, anchor="w")
+        ctk.CTkCheckBox(row, text=t("login.remember_me"),
+                        variable=remember_var,
+                        font=ctk.CTkFont(size=11),
+                        text_color=COLORS["text_light"],
+                        fg_color=COLORS["primary"],
+                        hover_color="#2563eb",
+                        checkmark_color="#ffffff",
+                        width=20, height=20).pack(side="left")
 
-        # Cargar email guardado (la contraseña nunca se persiste)
-        saved_email = db.get_config("remember_email")
+        ctk.CTkButton(row, text=t("login.forgot_password"),
+                      fg_color="transparent", text_color=COLORS["primary"],
+                      hover_color="#0f0f0f", font=ctk.CTkFont(size=11),
+                      height=24, width=140,
+                      command=lambda: self.mostrar_recuperar_password(entry_email.get())
+                      ).pack(side="right")
+
+        # Cargar email guardado
+        saved_email = db.get_config("remember_email") or ""
         if saved_email:
             entry_email.insert(0, saved_email)
             remember_var.set(True)
 
-        # Botón "Olvidé mi contraseña"
-        btn_olvide = ctk.CTkButton(frame, text=t("login.forgot_password"),
-                                    command=lambda: self.mostrar_recuperar_password(entry_email.get()),
-                                    width=450, height=30, font=("Arial", 12),
-                                    fg_color="transparent", text_color=COLORS["primary"],
-                                    hover_color=COLORS["card"])
-        btn_olvide.pack(pady=(0, 12), padx=50)
+        # ── Error label ───────────────────────────────────────────────────────
+        error_var = ctk.StringVar()
+        ctk.CTkLabel(card, textvariable=error_var,
+                     text_color=COLORS["danger"],
+                     font=ctk.CTkFont(size=11),
+                     wraplength=280).pack(pady=(4, 0))
 
-        def login():
+        # ── Botón principal ───────────────────────────────────────────────────
+        btn_login = ctk.CTkButton(card, text=t("login.sign_in"),
+                                  width=300, height=42,
+                                  fg_color=COLORS["primary"],
+                                  hover_color="#2563eb",
+                                  font=ctk.CTkFont(size=14, weight="bold"),
+                                  command=lambda: _login())
+        btn_login.pack(pady=(10, 6), padx=32)
+
+        # ── Links secundarios ─────────────────────────────────────────────────
+        ctk.CTkButton(card, text=t("login.create_account"),
+                      fg_color="transparent", text_color=COLORS["text_light"],
+                      hover_color="#1a1a2e", font=ctk.CTkFont(size=11),
+                      width=300, height=28,
+                      command=self.mostrar_registro).pack(pady=(0, 2))
+
+        ctk.CTkButton(card, text="🔑 Activar licencia",
+                      fg_color="transparent", text_color=COLORS["text_light"],
+                      hover_color="#1a1a2e", font=ctk.CTkFont(size=11),
+                      width=300, height=28,
+                      command=self.mostrar_opciones_inicio).pack(pady=(0, 4))
+
+        # ── Selector de idioma ────────────────────────────────────────────────
+        lang_row = ctk.CTkFrame(card, fg_color="transparent")
+        lang_row.pack(pady=(4, 20))
+        current_lang = get_language()
+        for code, label in [("es", "ES"), ("en", "EN"), ("pt", "PT")]:
+            is_active = current_lang == code
+            ctk.CTkButton(lang_row, text=label, width=44, height=24,
+                          font=ctk.CTkFont(size=10),
+                          fg_color=COLORS["primary"] if is_active else "transparent",
+                          text_color="#ffffff" if is_active else COLORS["text_light"],
+                          hover_color="#2563eb",
+                          command=lambda c=code: self.cambiar_idioma(c)
+                          ).pack(side="left", padx=2)
+
+        entry_pass.bind('<Return>', lambda _: _login())
+
+        # ── Lógica de login (sin cambios) ─────────────────────────────────────
+        def _login():
             email = entry_email.get().strip()
             password = entry_pass.get().strip()
-
             if not email or not password:
-                self.mostrar_mensaje(t("common.error"), t("login.error_empty"), "error")
+                error_var.set(t("login.error_empty"))
                 return
+            error_var.set("")
+            btn_login.configure(state="disabled", text="Verificando...")
 
-            # Guardar o borrar email según checkbox (nunca se persiste la contraseña)
             if remember_var.get():
                 db.set_config("remember_email", email)
             else:
                 db.set_config("remember_email", "")
 
-            # Intentar autenticar online con PAMPA primero
+            import threading as _th
+            _th.Thread(target=_login_bg, args=(email, password), daemon=True).start()
+
+        def _login_bg(email, password):
             from modules.pampa_client import PampaClient
             pampa = PampaClient("WELCOME_X")
             resultado_online = pampa.login(email, password)
 
             if resultado_online.get("success"):
-                # Usuario autenticado online - guardar datos en local para cache
                 user_data = resultado_online["usuario"]
                 licencias = resultado_online.get("licencias", [])
 
-                # Crear/actualizar usuario en BD local
                 local_id = None
                 db.connect()
                 try:
                     db.cursor.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
                     existing = db.cursor.fetchone()
-
                     import hashlib
                     password_hash = hashlib.sha256(password.encode()).hexdigest()
-
                     if existing:
-                        # Actualizar
                         db.cursor.execute("""
                             UPDATE usuarios SET nombre = ?, apellido = ?, password = ?
                             WHERE email = ?
                         """, (user_data.get('nombre', ''), user_data.get('apellido', ''), password_hash, email))
                         local_id = existing['id']
                     else:
-                        # Crear
                         import uuid
                         from datetime import datetime
                         db.cursor.execute("""
@@ -1667,14 +1725,12 @@ class WelcomeXApp(ctk.CTk):
                               user_data.get('nombre', ''), user_data.get('apellido', ''),
                               datetime.now().isoformat()))
                         local_id = db.cursor.lastrowid
-
                     db.connection.commit()
                 except Exception as e:
                     print(f"[LOGIN] Error sincronizando usuario local: {e}")
                 finally:
                     db.disconnect()
 
-                # Establecer usuario actual con datos de PAMPA
                 self.usuario_actual = {
                     "id": local_id if local_id is not None else user_data.get('id'),
                     "pampa_id": user_data.get('id'),
@@ -1685,7 +1741,6 @@ class WelcomeXApp(ctk.CTk):
                     "licencias": licencias
                 }
 
-                # Auto-activar licencia WelcomeX si viene en la respuesta y no está activada localmente
                 if not self.cargar_license_key():
                     lic_wx = next(
                         (l for l in licencias
@@ -1698,43 +1753,28 @@ class WelcomeXApp(ctk.CTk):
                             result = self.pampa.validate_license(lic_wx["license_key"], force_online=True)
                             if result.get("valid"):
                                 self.guardar_license_key(lic_wx["license_key"])
-                                print(f"[LOGIN] Licencia WelcomeX auto-activada: {lic_wx['license_key']}")
                         except Exception as e:
                             print(f"[LOGIN] Error auto-activando licencia: {e}")
 
-                self.mostrar_principal()
+                self.after(0, self.mostrar_principal)
             else:
-                # Error online - intentar local como fallback
                 error_msg = resultado_online.get("error", "")
                 if "conexión" in error_msg.lower() or "timeout" in error_msg.lower() or "conectar" in error_msg.lower():
-                    # Sin conexión - intentar BD local
                     resultado_local = db.autenticar_usuario(email, password)
                     if resultado_local["success"]:
                         self.usuario_actual = resultado_local["usuario"]
-                        self.mostrar_mensaje(t("common.info"), t("connection.no_connection"), "info")
-                        self.mostrar_principal()
+                        self.after(0, self.mostrar_principal)
                     else:
-                        self.mostrar_mensaje("Error", "Sin conexión y credenciales no encontradas localmente.", "error")
+                        self.after(0, lambda: (
+                            error_var.set("Sin conexión y credenciales no encontradas localmente."),
+                            btn_login.configure(state="normal", text=t("login.sign_in"))
+                        ))
                 else:
-                    self.mostrar_mensaje("Error", resultado_online.get("error", "Error de autenticación"), "error")
-        
-        entry_pass.bind('<Return>', lambda e: login())
-        
-        # Botones
-        ctk.CTkButton(frame, text=t("login.sign_in"), command=login, width=450, height=50,
-                     font=("Arial", 16, "bold"), fg_color=COLORS["primary"],
-                     hover_color="#2563eb").pack(pady=10)
-
-        ctk.CTkButton(frame, text=t("login.create_account"), command=self.mostrar_registro,
-                     width=450, height=45, font=("Arial", 14),
-                     fg_color="transparent", border_width=2,
-                     border_color=COLORS["border"]).pack(pady=5)
-
-        ctk.CTkButton(frame, text="🔑 Activar licencia",
-                     command=self.mostrar_opciones_inicio,
-                     width=450, height=35, font=("Arial", 13),
-                     fg_color="transparent", text_color=COLORS["text_light"],
-                     hover_color=COLORS["card"]).pack(pady=(5, 15))
+                    msg = resultado_online.get("error", "Error de autenticación")
+                    self.after(0, lambda m=msg: (
+                        error_var.set(m),
+                        btn_login.configure(state="normal", text=t("login.sign_in"))
+                    ))
 
 
     def mostrar_registro(self):
