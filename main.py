@@ -2446,7 +2446,6 @@ class WelcomeXApp(ctk.CTk):
     def mostrar_estado_licencia(self, parent):
         """Mostrar estado de licencia PAMPA con indicador visual claro"""
         try:
-
             # Admins no necesitan licencia
             if self.usuario_actual and self.usuario_actual.get("rol") in ("admin", "superadmin"):
                 frame_lic = ctk.CTkFrame(parent, fg_color="#1a3a1a", corner_radius=8)
@@ -2455,26 +2454,45 @@ class WelcomeXApp(ctk.CTk):
                             font=("Arial", 12, "bold"), text_color="#4ade80").pack(padx=15, pady=8)
                 return
 
-            # Obtener estado de licencia desde caché
             license_key = self.cargar_license_key()
 
             if not license_key:
-                # Sin licencia configurada
                 frame_lic = ctk.CTkFrame(parent, fg_color="#4a1d1d", corner_radius=8)
                 frame_lic.pack(side="right", padx=10)
-
                 inner = ctk.CTkFrame(frame_lic, fg_color="transparent")
                 inner.pack(padx=15, pady=8)
-
                 ctk.CTkLabel(inner, text=f"❌ {t('config.no_license')}",
                             font=("Arial", 12, "bold"), text_color=COLORS["danger"]).pack()
                 ctk.CTkLabel(inner, text=t("config.configure_license"),
                             font=("Arial", 10), text_color="#fca5a5").pack()
                 return
 
-            # Validar licencia (usa caché si está disponible)
-            result = self.pampa.validate_license(license_key, force_online=False)
+            # Placeholder mientras valida en background (evita freezing de UI)
+            frame_lic = ctk.CTkFrame(parent, fg_color=COLORS["bg_card"], corner_radius=8)
+            frame_lic.pack(side="right", padx=10)
+            placeholder = ctk.CTkLabel(frame_lic, text="•••",
+                                       font=("Arial", 12), text_color=COLORS["text_light"])
+            placeholder.pack(padx=15, pady=8)
 
+            def _bg_validate():
+                result = self.pampa.validate_license(license_key, force_online=False)
+                self.after(0, lambda: _apply_result(result))
+
+            def _apply_result(result):
+                if not frame_lic.winfo_exists():
+                    return
+                for w in frame_lic.winfo_children():
+                    w.destroy()
+                self._render_licencia_frame(frame_lic, result)
+
+            threading.Thread(target=_bg_validate, daemon=True).start()
+
+        except Exception as e:
+            print(f"[ERROR] mostrar_estado_licencia: {e}")
+
+    def _render_licencia_frame(self, frame_lic, result):
+        """Rellena frame_lic con el estado de licencia — llamado desde el hilo principal."""
+        try:
             if not result:
                 return
 
@@ -2482,20 +2500,16 @@ class WelcomeXApp(ctk.CTk):
             horas = None
             expires_at_str = result.get('expires_at')
             if dias is None:
-                # Calcular desde expires_at si el servidor no lo envió
                 if expires_at_str:
                     try:
                         diff = datetime.fromisoformat(expires_at_str) - datetime.now()
                         dias = max(0, diff.days)
                         horas = max(0, int(diff.total_seconds() / 3600))
                     except:
-                        dias = 0
-                        horas = 0
+                        dias = 0; horas = 0
                 else:
-                    dias = 0
-                    horas = 0
+                    dias = 0; horas = 0
             else:
-                # Calcular horas desde expires_at
                 if expires_at_str:
                     try:
                         diff = datetime.fromisoformat(expires_at_str) - datetime.now()
@@ -2504,81 +2518,56 @@ class WelcomeXApp(ctk.CTk):
                         horas = dias * 24
                 else:
                     horas = dias * 24
+
             status = result.get('status', 'unknown')
 
-            # Determinar estado visual
             if not result.get('valid'):
-                # Licencia inválida o vencida
                 if status == 'expired':
-                    bg_color = "#4a1d1d"
-                    icono = "🔴"
+                    bg_color, icono = "#4a1d1d", "🔴"
                     texto_estado = t("license_status.expired")
                     texto_sub = t("license_status.renew_license")
-                    color_texto = COLORS["danger"]
-                    color_sub = "#fca5a5"
+                    color_texto, color_sub = COLORS["danger"], "#fca5a5"
                 else:
-                    bg_color = "#4a1d1d"
-                    icono = "⛔"
+                    bg_color, icono = "#4a1d1d", "⛔"
                     texto_estado = t("license_status.invalid")
                     texto_sub = result.get('message', t("license_status.contact_support"))[:25]
-                    color_texto = COLORS["danger"]
-                    color_sub = "#fca5a5"
+                    color_texto, color_sub = COLORS["danger"], "#fca5a5"
             elif dias == 0 and horas is not None and horas > 0:
-                # Menos de 1 día - mostrar horas
-                bg_color = "#4a1d1d"
-                icono = "🔴"
+                bg_color, icono = "#4a1d1d", "🔴"
                 texto_estado = f"VENCE EN {horas} HORA{'S' if horas != 1 else ''}"
                 texto_sub = t("license_status.renew_urgent")
-                color_texto = COLORS["danger"]
-                color_sub = "#fca5a5"
+                color_texto, color_sub = COLORS["danger"], "#fca5a5"
             elif dias <= 3:
-                # Crítico - vence en 3 días o menos
-                bg_color = "#4a1d1d"
-                icono = "🔴"
+                bg_color, icono = "#4a1d1d", "🔴"
                 texto_estado = t("license_status.expires_in", days=dias, plural='S' if dias != 1 else '')
                 texto_sub = t("license_status.renew_urgent")
-                color_texto = COLORS["danger"]
-                color_sub = "#fca5a5"
+                color_texto, color_sub = COLORS["danger"], "#fca5a5"
             elif dias <= 7:
-                # Advertencia - vence en una semana
-                bg_color = "#4a3f1d"
-                icono = "🟠"
+                bg_color, icono = "#4a3f1d", "🟠"
                 texto_estado = t("license_status.expires_in", days=dias, plural='S' if dias != 1 else '')
                 texto_sub = t("license_status.consider_renew")
-                color_texto = COLORS["warning"]
-                color_sub = "#fde68a"
+                color_texto, color_sub = COLORS["warning"], "#fde68a"
             elif dias <= 30:
-                # Próximo a vencer
-                bg_color = "#1d3a4a"
-                icono = "🟡"
+                bg_color, icono = "#1d3a4a", "🟡"
                 texto_estado = t("license_status.expires_in", days=dias, plural='S' if dias != 1 else '')
                 texto_sub = t("license_status.valid")
-                color_texto = "#fbbf24"
-                color_sub = "#bfdbfe"
+                color_texto, color_sub = "#fbbf24", "#bfdbfe"
             else:
-                # Todo bien
-                bg_color = "#1d4a2a"
-                icono = "🟢"
+                bg_color, icono = "#1d4a2a", "🟢"
                 texto_estado = t("license_status.valid")
                 texto_sub = t("license_status.valid_days", days=dias)
-                color_texto = COLORS["success"]
-                color_sub = "#86efac"
+                color_texto, color_sub = COLORS["success"], "#86efac"
 
-            # Crear frame visual
-            frame_lic = ctk.CTkFrame(parent, fg_color=bg_color, corner_radius=8)
-            frame_lic.pack(side="right", padx=10)
-
+            frame_lic.configure(fg_color=bg_color)
             inner = ctk.CTkFrame(frame_lic, fg_color="transparent")
             inner.pack(padx=15, pady=8)
-
             ctk.CTkLabel(inner, text=f"{icono} {texto_estado}",
-                        font=("Arial", 12, "bold"), text_color=color_texto).pack()
+                         font=("Arial", 12, "bold"), text_color=color_texto).pack()
             ctk.CTkLabel(inner, text=texto_sub,
-                        font=("Arial", 10), text_color=color_sub).pack()
+                         font=("Arial", 10), text_color=color_sub).pack()
 
         except Exception as e:
-            print(f"[ERROR] mostrar_estado_licencia: {e}")
-            pass
+            print(f"[ERROR] _render_licencia_frame: {e}")
     
     def crear_card_evento(self, evento):
         """Card de evento"""
@@ -2609,9 +2598,7 @@ class WelcomeXApp(ctk.CTk):
                     font=("Arial", 13, "bold")).pack(side="left")
 
         # Stats de invitados - SIEMPRE VISIBLE (en todos los estados)
-        invitados = db.obtener_invitados_evento(evento['id'])
-        total = len(invitados)
-        acreditados = len([i for i in invitados if i.get('presente')])
+        total, acreditados = db.contar_invitados_evento(evento['id'])
 
         if total > 0:
             porcentaje = int((acreditados / total) * 100) if total > 0 else 0
@@ -5748,10 +5735,13 @@ class WelcomeXApp(ctk.CTk):
         ctk.CTkLabel(inner, text="Ingresa tu clave de licencia para activar WelcomeX",
                     font=("Arial", 14), text_color=COLORS["text_light"]).pack(pady=(0, 30))
 
-        # Entry para la clave
+        # Entry para la clave (pre-rellenar con clave guardada si existe)
+        saved_key = self.cargar_license_key() or ""
         entry_key = ctk.CTkEntry(inner, width=450, height=50,
                                 font=("Arial", 14),
                                 placeholder_text="XXXXX-XXXXX-XXXXX-XXXXX")
+        if saved_key:
+            entry_key.insert(0, saved_key)
         entry_key.pack(pady=(0, 20))
         _bind_ctx_menu(entry_key)  # click derecho → copiar/pegar
 
@@ -5759,13 +5749,43 @@ class WelcomeXApp(ctk.CTk):
         msg_label = ctk.CTkLabel(inner, text="", font=("Arial", 12), wraplength=400)
         msg_label.pack(pady=(0, 10))
 
+        # Label de auto-retry (visible solo en hardware_mismatch)
+        retry_label = ctk.CTkLabel(inner, text="", font=("Arial", 10),
+                                   text_color=COLORS["warning"], wraplength=400)
+        retry_label.pack(pady=(0, 4))
+
         btn_activar = None
+        _retry_job = [None]  # lista mutable para closure
+
+        def _cancel_retry():
+            if _retry_job[0]:
+                try:
+                    self.after_cancel(_retry_job[0])
+                except Exception:
+                    pass
+                _retry_job[0] = None
+            retry_label.configure(text="")
+
+        def _retry_countdown(key: str, remaining: int):
+            if not inner.winfo_exists():
+                return
+            if remaining <= 0:
+                retry_label.configure(text="Verificando con el servidor...")
+                _retry_job[0] = None
+                import threading as _th
+                _th.Thread(target=_activar_bg, args=(key,), daemon=True).start()
+                return
+            retry_label.configure(
+                text=f"Reintentando automáticamente en {remaining}s..."
+            )
+            _retry_job[0] = self.after(1000, _retry_countdown, key, remaining - 1)
 
         def activar():
             license_key = entry_key.get().strip()
             if not license_key:
                 msg_label.configure(text="❌ Ingresa una clave de licencia", text_color=COLORS["danger"])
                 return
+            _cancel_retry()
             msg_label.configure(text="🔄 Validando con PAMPA...", text_color=COLORS["warning"])
             if btn_activar:
                 btn_activar.configure(state="disabled")
@@ -5780,7 +5800,7 @@ class WelcomeXApp(ctk.CTk):
             self.after(0, lambda r=result: _activar_done(license_key, r))
 
         def _activar_done(license_key: str, result: dict):
-            if btn_activar:
+            if btn_activar and btn_activar.winfo_exists():
                 btn_activar.configure(state="normal")
             if result.get('valid'):
                 self.guardar_license_key(license_key)
@@ -5792,6 +5812,14 @@ class WelcomeXApp(ctk.CTk):
                     expira_fmt = f"{dias} días"
                 msg_label.configure(text=f"✅ Licencia activada! Vence el {expira_fmt}", text_color=COLORS["success"])
                 self.after(1500, self.reiniciar_app)
+            elif result.get('status') == 'hardware_mismatch':
+                msg_label.configure(
+                    text="❌ Esta licencia está activa en otro equipo. El soporte fue notificado.",
+                    text_color=COLORS["danger"], wraplength=400
+                )
+                # Auto-retry: cuando el admin libere, se activa solo
+                if inner.winfo_exists():
+                    _retry_countdown(license_key, 30)
             else:
                 msg_label.configure(
                     text=f"❌ {result.get('message', result.get('status', 'Error desconocido'))}",
